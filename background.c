@@ -7,7 +7,6 @@
 #include "wayland-client.h"
 #include "wayland-glib.h"
 
-static const char gem_device[] = "/dev/dri/card0";
 static const char socket_name[] = "\0wayland";
 
 static uint8_t *convert_to_argb(GdkPixbuf *pixbuf, int *new_stride)
@@ -41,7 +40,8 @@ static uint8_t *convert_to_argb(GdkPixbuf *pixbuf, int *new_stride)
 	return data;
 }
 
-static struct wl_buffer *wl_buffer_for_pixbuf(GdkPixbuf *pixbuf)
+static struct wl_buffer *wl_buffer_for_pixbuf(struct wl_display *display,
+					      GdkPixbuf *pixbuf)
 {
 	int32_t width, height, stride;
 	void *data;
@@ -50,7 +50,7 @@ static struct wl_buffer *wl_buffer_for_pixbuf(GdkPixbuf *pixbuf)
 	height = gdk_pixbuf_get_height(pixbuf);
 	data = convert_to_argb(pixbuf, &stride);
 
-	return wl_buffer_create_from_data(width, height, stride, data);
+	return wl_display_create_buffer_from_data(display, width, height, stride, data);
 }
 
 int main(int argc, char *argv[])
@@ -62,11 +62,6 @@ int main(int argc, char *argv[])
 	struct wl_buffer *buffer;
 	GMainLoop *loop;
 	GSource *source;
-
-	if (wl_gem_open (gem_device) < 0) {
-		fprintf(stderr, "drm open failed: %m\n");
-		return -1;
-	}
 
 	display = wl_display_create(socket_name);
 	if (display == NULL) {
@@ -83,7 +78,7 @@ int main(int argc, char *argv[])
 	g_type_init();
 	image = gdk_pixbuf_new_from_file (argv[1], &error);
 
-	buffer = wl_buffer_for_pixbuf (image);
+	buffer = wl_buffer_for_pixbuf (display, image);
 	wl_surface_attach_buffer(surface, buffer);
 	wl_surface_map(surface, 0, 0, 1280, 800);
 

@@ -12,7 +12,6 @@
 
 #include "cairo-util.h"
 
-static const char gem_device[] = "/dev/dri/card0";
 static const char socket_name[] = "\0wayland";
 
 static void
@@ -83,11 +82,6 @@ int main(int argc, char *argv[])
 	GSource *source;
 	struct wl_buffer *buffer;
 
-	if (wl_gem_open (gem_device) < 0) {
-		fprintf(stderr, "drm open failed: %m\n");
-		return -1;
-	}
-
 	display = wl_display_create(socket_name);
 	if (display == NULL) {
 		fprintf(stderr, "failed to create display: %m\n");
@@ -103,7 +97,7 @@ int main(int argc, char *argv[])
 	pointer.surface = wl_display_create_surface(display);
 
 	s = draw_pointer(pointer.width, pointer.height);
-	buffer = wl_buffer_create_from_cairo_surface(s);
+	buffer = wl_buffer_create_from_cairo_surface(display, s);
 
 	wl_surface_attach_buffer(pointer.surface, buffer);
 	wl_surface_map(pointer.surface, 512, 384, pointer.width, pointer.height);

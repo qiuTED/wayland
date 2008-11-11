@@ -1,6 +1,9 @@
 #ifndef _WAYLAND_CLIENT_H
 #define _WAYLAND_CLIENT_H
 
+#include <GL/gl.h>
+#include <eagle.h>
+
 /* GCC visibility */
 #if defined(__GNUC__) && __GNUC__ >= 4
 #define WL_EXPORT __attribute__ ((visibility("default")))
@@ -8,6 +11,7 @@
 #define WL_EXPORT
 #endif
 
+struct wl_backend;
 struct wl_display;
 struct wl_surface;
 struct wl_buffer;
@@ -39,6 +43,15 @@ void wl_display_set_event_handler(struct wl_display *display,
 struct wl_surface *
 wl_display_create_surface(struct wl_display *display);
 
+EGLDisplay wl_display_get_egl_display(struct wl_display *display);
+
+struct wl_buffer *wl_display_create_buffer(struct wl_display *display,
+					   int width, int height, int stride);
+
+struct wl_buffer *wl_display_create_buffer_from_data(struct wl_display *display,
+						     int width, int height,
+						     int stride, void *data);
+
 /* Surface functions.  */
 
 void wl_surface_destroy(struct wl_surface *surface);
@@ -57,27 +70,5 @@ void wl_surface_attach_buffer(struct wl_surface *surface,
 void wl_surface_copy_buffer(struct wl_surface *surface,
 			    int32_t dst_x, int32_t dst_y, struct wl_buffer *src,
 			    int32_t x, int32_t y, int32_t width, int32_t height);
-
-/* Back-end functions.  */
-
-int wl_gem_open (const char *gem_device);
-
-int wl_gem_close (void);
-
-/* Buffer functions.  */
-
-struct wl_buffer {
-	int width, height, stride;
-	uint32_t name, handle;
-};
-
-struct wl_buffer *wl_buffer_create(int width, int height, int stride);
-
-struct wl_buffer *wl_buffer_create_from_data(int width, int height,
-					     int stride, void *data);
-
-int wl_buffer_destroy(struct wl_buffer *buffer);
-
-int wl_buffer_data(struct wl_buffer *buffer, void *data);
 
 #endif

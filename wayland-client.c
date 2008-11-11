@@ -12,6 +12,7 @@
 
 #include "connection.h"
 #include "wayland-client.h"
+#include "wayland-backend.h"
 
 static const char socket_name[] = "\0wayland";
 
@@ -23,6 +24,7 @@ struct wl_proxy {
 struct wl_display {
 	struct wl_proxy proxy;
 	struct wl_connection *connection;
+	struct wl_backend *backend;
 	int fd;
 	uint32_t id;
 	uint32_t mask;
@@ -56,16 +58,22 @@ WL_EXPORT struct wl_display *
 wl_display_create(const char *address)
 {
 	struct wl_display *display;
+	struct wl_backend *backend;
 	struct sockaddr_un name;
 	socklen_t size;
 	char buffer[256];
 	uint32_t id, length;
+
+	backend = wl_backend_create ("gem", NULL);
+	if (backend == NULL)
+		return NULL;
 
 	display = malloc(sizeof *display);
 	if (display == NULL)
 		return NULL;
 
 	memset(display, 0, sizeof *display);
+	display->backend = backend;
 	display->fd = socket(PF_LOCAL, SOCK_STREAM, 0);
 	if (display->fd < 0) {
 		free(display);
@@ -105,6 +113,7 @@ wl_display_create(const char *address)
 WL_EXPORT void
 wl_display_destroy(struct wl_display *display)
 {
+	wl_backend_destroy(display->backend);
 	wl_connection_destroy(display->connection);
 	close(display->fd);
 	free(display);
@@ -188,6 +197,29 @@ wl_display_create_surface(struct wl_display *display)
 	wl_connection_marshal(display->connection, NULL, display->proxy.id,
 			      WL_DISPLAY_CREATE_SURFACE, "O", surface->proxy.id);
 	return surface;
+}
+
+WL_EXPORT EGLDisplay
+wl_display_get_egl_display(struct wl_display *display)
+{
+	return wl_backend_get_egl_display (display->backend);
+}
+
+WL_EXPORT struct wl_buffer *
+wl_display_create_buffer(struct wl_display *display,
+			 int width, int height, int stride)
+{
+	return wl_backend_create_buffer (display->backend,
+					 width, height, stride);
+}
+
+WL_EXPORT struct wl_buffer *
+wl_display_create_buffer_from_data(struct wl_display *display,
+				   int width, int height,
+				   int stride, void *data)
+{
+	return wl_backend_create_buffer_from_data (display->backend,
+						   width, height, stride, data);
 }
 
 

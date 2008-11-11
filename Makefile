@@ -22,7 +22,8 @@ wayland : LDLIBS += -ldl -rdynamic
 wayland : $(wayland_objs)
 	gcc -o $@ $(LDLIBS) $(wayland_objs)
 
-libwayland_objs = wayland-client-gem.o wayland-client.o connection.o hash.o
+libwayland_objs = wayland-backend.o wayland-backend-gem.o wayland-client.o \
+	connection.o hash.o
 
 libwayland.so : $(libwayland_objs)
 

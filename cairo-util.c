@@ -7,7 +7,8 @@
 #include "cairo-util.h"
 
 struct wl_buffer *
-wl_buffer_create_from_cairo_surface(cairo_surface_t *surface)
+wl_buffer_create_from_cairo_surface(struct wl_display *display,
+				    cairo_surface_t *surface)
 {
 	int32_t width, height, stride;
 	void *data;
@@ -17,7 +18,8 @@ wl_buffer_create_from_cairo_surface(cairo_surface_t *surface)
 	stride = cairo_image_surface_get_stride(surface);
 	data = cairo_image_surface_get_data(surface);
 
-	return wl_buffer_create_from_data(width, height, stride, data);
+	return wl_display_create_buffer_from_data(display, width, height,
+						  stride, data);
 }
 
 void

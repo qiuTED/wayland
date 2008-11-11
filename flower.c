@@ -13,7 +13,6 @@
 #include "wayland-client.h"
 #include "wayland-glib.h"
 
-static const char gem_device[] = "/dev/dri/card0";
 static const char socket_name[] = "\0wayland";
 
 static void
@@ -108,11 +107,6 @@ int main(int argc, char *argv[])
 	GSource *source;
 	struct flower flower;
 
-	if (wl_gem_open (gem_device) < 0) {
-		fprintf(stderr, "drm open failed: %m\n");
-		return -1;
-	}
-
 	loop = g_main_loop_new(NULL, FALSE);
 
 	display = wl_display_create(socket_name);
@@ -135,7 +129,7 @@ int main(int argc, char *argv[])
 	flower.i = ts.tv_nsec;
 
 	s = draw_stuff(flower.width, flower.height);
-	flower.buffer = wl_buffer_create_from_cairo_surface(s);
+	flower.buffer = wl_buffer_create_from_cairo_surface(display, s);
 
 	wl_surface_attach_buffer(flower.surface, flower.buffer);
 

@@ -12,12 +12,12 @@
 #include <eagle.h>
 
 #include "wayland-client.h"
+#include "wayland-backend.h"
 #include "wayland-glib.h"
 
 #include "gears.h"
 #include "cairo-util.h"
 
-static const char gem_device[] = "/dev/dri/card0";
 static const char socket_name[] = "\0wayland";
 
 static void die(const char *msg)
@@ -163,13 +163,15 @@ draw_window(void *data)
 		       buffer->width, buffer->height);
 
 	/* FIXME: Free window->buffer when we receive the ack event. */
-
-	buffer = window->egl_buffer;
-	gears_draw(window->gears, window->gears_angle);
-	wl_surface_copy_buffer(window->surface,
-			       (window->width - 300) / 2,
-			       50 + (window->height - 50 - 300) / 2,
-			       buffer, 0, 0, buffer->width, buffer->height);
+	if (window->egl_display != NULL) {
+		buffer = window->egl_buffer;
+		gears_draw(window->gears, window->gears_angle);
+		wl_surface_copy_buffer(window->surface,
+				       (window->width - 300) / 2,
+				       50 + (window->height - 50 - 300) / 2,
+				       buffer,
+				       0, 0, buffer->width, buffer->height);
+	}
 
 	window->redraw_scheduled = 0;
 
@@ -285,9 +287,9 @@ window_create(struct wl_display *display)
 	window->state = WINDOW_STABLE;
 	window->background = cairo_pattern_create_rgba (red, green, blue, alpha);
 
-	window->egl_display = eglCreateDisplayNative("/dev/dri/card0", "i965");
+	window->egl_display = wl_display_get_egl_display(display);
 	if (window->egl_display == NULL)
-		die("failed to create display\n");
+		return NULL;
 
 	if (!eglInitialize(window->egl_display, &major, &minor))
 		die("failed to initialize display\n");
@@ -302,12 +304,10 @@ window_create(struct wl_display *display)
 
 	/* FIXME: We'd need to get the stride right here in a chipset
 	 * independent way.  */
-	buffer = wl_buffer_create(300, 300, (300 * 4 + 15) & ~15);
+	buffer = wl_display_create_buffer(display, 300, 300, (300 * 4 + 15) & ~15);
 	window->egl_buffer = buffer;
-	window->egl_surface = eglCreateSurfaceForName(window->egl_display,
-						      window->config, buffer->name,
-						      buffer->width, buffer->height,
-						      buffer->stride, NULL);
+	window->egl_surface = wl_buffer_get_egl_surface(buffer,
+							window->config);
 
 	if (window->egl_surface == NULL)
 		die("failed to create egl surface\n");
@@ -321,8 +321,6 @@ window_create(struct wl_display *display)
 	window->gears = gears_create(red, green, blue, alpha);
 	window->gears_angle = 0.0;
 
-	draw_window(window);
-
 	return window;
 }
 
@@ -332,6 +330,9 @@ draw(gpointer data)
 	struct window *window = data;
 	struct wl_buffer *buffer;
 	
+	if (window->egl_buffer == NULL)
+		return TRUE;
+
 	if (!window->redraw_scheduled) {
 		gears_draw(window->gears, window->gears_angle);
 
@@ -354,11 +355,6 @@ int main(int argc, char *argv[])
 	struct window *window;
 	GMainLoop *loop;
 	GSource *source;
-
-	if (wl_gem_open (gem_device) < 0) {
-		fprintf(stderr, "drm open failed: %m\n");
-		return -1;
-	}
 
 	display = wl_display_create(socket_name);
 	if (display == NULL) {
