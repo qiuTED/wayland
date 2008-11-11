@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <fcntl.h>
 #include <unistd.h>
 #include <math.h>
 #include <time.h>
@@ -28,21 +27,21 @@ static void die(const char *msg)
 }
 
 struct window {
+	struct wl_display *display;
 	struct wl_surface *surface;
 	int x, y, width, height;
 	int drag_x, drag_y, last_x, last_y;
 	int state;
 	uint32_t name;
-	int fd;
 	int redraw_scheduled;
 	cairo_pattern_t *background;
 
-	struct buffer *buffer;
-	struct buffer *egl_buffer;
+	struct wl_buffer *buffer;
+	struct wl_buffer *egl_buffer;
 
 	GLfloat gears_angle;
 	struct gears *gears;
-	EGLDisplay display;
+	EGLDisplay egl_display;
 	EGLContext context;
 	EGLConfig config;
 	EGLSurface egl_surface;
@@ -71,7 +70,7 @@ draw_window(void *data)
 	int border = 2, radius = 5;
 	cairo_text_extents_t extents;
 	cairo_pattern_t *gradient, *outline, *bright, *dim;
-	struct buffer *buffer;
+	struct wl_buffer *buffer;
 	const static char title[] = "Wayland First Post";
 
 	surface = cairo_image_surface_create(CAIRO_FORMAT_RGB24,
@@ -151,15 +150,14 @@ draw_window(void *data)
 	cairo_destroy(cr);
 
 	if (window->buffer != NULL)
-		buffer_destroy(window->buffer, window->fd);
-	buffer = buffer_create_from_cairo_surface(window->fd, surface);
+		wl_buffer_destroy(window->buffer);
+	buffer = wl_buffer_create_from_cairo_surface(window->display, surface);
 	window->buffer = buffer;
 
 	cairo_surface_destroy(surface);
 
-	wl_surface_attach(window->surface, buffer->name,
-			  buffer->width, buffer->height, buffer->stride);
-			  
+	wl_surface_attach_buffer(window->surface, buffer);
+
 	wl_surface_map(window->surface, 
 		       window->x, window->y,
 		       buffer->width, buffer->height);
@@ -168,11 +166,10 @@ draw_window(void *data)
 
 	buffer = window->egl_buffer;
 	gears_draw(window->gears, window->gears_angle);
-	wl_surface_copy(window->surface,
-			(window->width - 300) / 2,
-			50 + (window->height - 50 - 300) / 2,
-			buffer->name, buffer->stride,
-			0, 0, buffer->width, buffer->height);
+	wl_surface_copy_buffer(window->surface,
+			       (window->width - 300) / 2,
+			       50 + (window->height - 50 - 300) / 2,
+			       buffer, 0, 0, buffer->width, buffer->height);
 
 	window->redraw_scheduled = 0;
 
@@ -266,12 +263,12 @@ event_handler(struct wl_display *display,
 }
 
 static struct window *
-window_create(struct wl_display *display, int fd)
+window_create(struct wl_display *display)
 {
 	EGLint major, minor, count;
 	EGLConfig configs[64];
 	struct window *window;
-	struct buffer *buffer;
+	struct wl_buffer *buffer;
 	const GLfloat red = 0, green = 0, blue = 0, alpha = 0.9;
 
 	window = malloc(sizeof *window);
@@ -279,35 +276,35 @@ window_create(struct wl_display *display, int fd)
 		return NULL;
 
 	memset(window, 0, sizeof *window);
+	window->display = display;
 	window->surface = wl_display_create_surface(display);
 	window->x = 200;
 	window->y = 200;
 	window->width = 450;
 	window->height = 500;
 	window->state = WINDOW_STABLE;
-	window->fd = fd;
 	window->background = cairo_pattern_create_rgba (red, green, blue, alpha);
 
-	window->display = eglCreateDisplayNative("/dev/dri/card0", "i965");
-	if (window->display == NULL)
+	window->egl_display = eglCreateDisplayNative("/dev/dri/card0", "i965");
+	if (window->egl_display == NULL)
 		die("failed to create display\n");
 
-	if (!eglInitialize(window->display, &major, &minor))
+	if (!eglInitialize(window->egl_display, &major, &minor))
 		die("failed to initialize display\n");
 
-	if (!eglGetConfigs(window->display, configs, 64, &count))
+	if (!eglGetConfigs(window->egl_display, configs, 64, &count))
 		die("failed to get configs\n");
 
 	window->config = configs[24];
-	window->context = eglCreateContext(window->display, window->config, NULL, NULL);
+	window->context = eglCreateContext(window->egl_display, window->config, NULL, NULL);
 	if (window->context == NULL)
 		die("failed to create context\n");
 
-	/* FIXME: We need to get the stride right here in a chipset
-	 * independent way.  Maybe do it in name_cairo_surface(). */
-	buffer = buffer_create(window->fd, 300, 300, (300 * 4 + 15) & ~15);
+	/* FIXME: We'd need to get the stride right here in a chipset
+	 * independent way.  */
+	buffer = wl_buffer_create(300, 300, (300 * 4 + 15) & ~15);
 	window->egl_buffer = buffer;
-	window->egl_surface = eglCreateSurfaceForName(window->display,
+	window->egl_surface = eglCreateSurfaceForName(window->egl_display,
 						      window->config, buffer->name,
 						      buffer->width, buffer->height,
 						      buffer->stride, NULL);
@@ -315,7 +312,7 @@ window_create(struct wl_display *display, int fd)
 	if (window->egl_surface == NULL)
 		die("failed to create egl surface\n");
 
-	if (!eglMakeCurrent(window->display,
+	if (!eglMakeCurrent(window->egl_display,
 			    window->egl_surface, window->egl_surface, window->context))
 		die("failed to make context current\n");
 
@@ -333,18 +330,17 @@ static gboolean
 draw(gpointer data)
 {
 	struct window *window = data;
-	struct buffer *buffer;
-
+	struct wl_buffer *buffer;
 	
 	if (!window->redraw_scheduled) {
 		gears_draw(window->gears, window->gears_angle);
 
 		buffer = window->egl_buffer;
-		wl_surface_copy(window->surface,
-				(window->width - 300) / 2,
-				50 + (window->height - 50 - 300) / 2,
-				buffer->name, buffer->stride,
-				0, 0, buffer->width, buffer->height);
+		wl_surface_copy_buffer(window->surface,
+				       (window->width - 300) / 2,
+				       50 + (window->height - 50 - 300) / 2,
+				       buffer,
+				       0, 0, buffer->width, buffer->height);
 	}
 
 	window->gears_angle += 1;
@@ -355,13 +351,11 @@ draw(gpointer data)
 int main(int argc, char *argv[])
 {
 	struct wl_display *display;
-	int fd;
 	struct window *window;
 	GMainLoop *loop;
 	GSource *source;
 
-	fd = open(gem_device, O_RDWR);
-	if (fd < 0) {
+	if (wl_gem_open (gem_device) < 0) {
 		fprintf(stderr, "drm open failed: %m\n");
 		return -1;
 	}
@@ -376,7 +370,7 @@ int main(int argc, char *argv[])
 	source = wayland_source_new(display);
 	g_source_attach(source, NULL);
 
-	window = window_create(display, fd);
+	window = window_create(display);
 
 	draw_window(window);
 

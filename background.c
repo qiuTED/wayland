@@ -1,9 +1,6 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <fcntl.h>
-#include <i915_drm.h>
-#include <sys/ioctl.h>
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #include <glib.h>
 
@@ -44,11 +41,8 @@ static uint8_t *convert_to_argb(GdkPixbuf *pixbuf, int *new_stride)
 	return data;
 }
 
-static uint32_t name_pixbuf(int fd, GdkPixbuf *pixbuf)
+static struct wl_buffer *wl_buffer_for_pixbuf(GdkPixbuf *pixbuf)
 {
-	struct drm_i915_gem_create create;
-	struct drm_gem_flink flink;
-	struct drm_i915_gem_pwrite pwrite;
 	int32_t width, height, stride;
 	void *data;
 
@@ -56,42 +50,7 @@ static uint32_t name_pixbuf(int fd, GdkPixbuf *pixbuf)
 	height = gdk_pixbuf_get_height(pixbuf);
 	data = convert_to_argb(pixbuf, &stride);
 
-	memset(&create, 0, sizeof(create));
-	create.size = height * stride;
-
-	if (ioctl(fd, DRM_IOCTL_I915_GEM_CREATE, &create) != 0) {
-		fprintf(stderr, "gem create failed: %m\n");
-		return 0;
-	}
-
-	pwrite.handle = create.handle;
-	pwrite.offset = 0;
-	pwrite.size = height * stride;
-	pwrite.data_ptr = (uint64_t) (uintptr_t) data;
-	if (ioctl(fd, DRM_IOCTL_I915_GEM_PWRITE, &pwrite) < 0) {
-		fprintf(stderr, "gem pwrite failed: %m\n");
-		return 0;
-	}
-
-	flink.handle = create.handle;
-	if (ioctl(fd, DRM_IOCTL_GEM_FLINK, &flink) != 0) {
-		fprintf(stderr, "gem flink failed: %m\n");
-		return 0;
-	}
-
-#if 0
-	/* We need to hold on to the handle until the server has received
-	 * the attach request... we probably need a confirmation event.
-	 * I guess the breadcrumb idea will suffice. */
-	struct drm_gem_close close;
-	close.handle = create.handle;
-	if (ioctl(fd, DRM_IOCTL_GEM_CLOSE, &close) < 0) {
-		fprintf(stderr, "gem close failed: %m\n");
-		return 0;
-	}
-#endif
-
-	return flink.name;
+	return wl_buffer_create_from_data(width, height, stride, data);
 }
 
 int main(int argc, char *argv[])
@@ -100,13 +59,11 @@ int main(int argc, char *argv[])
 	GError *error = NULL;
 	struct wl_display *display;
 	struct wl_surface *surface;
-	int fd, width, height, stride;
-	uint32_t name;
+	struct wl_buffer *buffer;
 	GMainLoop *loop;
 	GSource *source;
 
-	fd = open(gem_device, O_RDWR);
-	if (fd < 0) {
+	if (wl_gem_open (gem_device) < 0) {
 		fprintf(stderr, "drm open failed: %m\n");
 		return -1;
 	}
@@ -126,14 +83,8 @@ int main(int argc, char *argv[])
 	g_type_init();
 	image = gdk_pixbuf_new_from_file (argv[1], &error);
 
-	name = name_pixbuf(fd, image);
-
-	width = gdk_pixbuf_get_width(image);
-	height = gdk_pixbuf_get_height(image);
-	stride = gdk_pixbuf_get_rowstride(image);
-
-	wl_surface_attach(surface, name, width, height, width * 4);
-
+	buffer = wl_buffer_for_pixbuf (image);
+	wl_surface_attach_buffer(surface, buffer);
 	wl_surface_map(surface, 0, 0, 1280, 800);
 
 	g_main_loop_run(loop);

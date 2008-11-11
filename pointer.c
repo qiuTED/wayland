@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <fcntl.h>
 #include <unistd.h>
 #include <math.h>
 #include <cairo.h>
@@ -79,14 +78,12 @@ int main(int argc, char *argv[])
 {
 	struct wl_display *display;
 	struct pointer pointer;
-	int fd;
 	cairo_surface_t *s;
 	GMainLoop *loop;
 	GSource *source;
-	struct buffer *buffer;
+	struct wl_buffer *buffer;
 
-	fd = open(gem_device, O_RDWR);
-	if (fd < 0) {
+	if (wl_gem_open (gem_device) < 0) {
 		fprintf(stderr, "drm open failed: %m\n");
 		return -1;
 	}
@@ -106,10 +103,9 @@ int main(int argc, char *argv[])
 	pointer.surface = wl_display_create_surface(display);
 
 	s = draw_pointer(pointer.width, pointer.height);
-	buffer = buffer_create_from_cairo_surface(fd, s);
+	buffer = wl_buffer_create_from_cairo_surface(s);
 
-	wl_surface_attach(pointer.surface, buffer->name,
-			  buffer->width, buffer->height, buffer->stride);
+	wl_surface_attach_buffer(pointer.surface, buffer);
 	wl_surface_map(pointer.surface, 512, 384, pointer.width, pointer.height);
 
 	wl_display_set_event_handler(display, event_handler, &pointer);

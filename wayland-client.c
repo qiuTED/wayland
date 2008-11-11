@@ -241,3 +241,24 @@ wl_surface_damage(struct wl_surface *surface,
 			      x, y, width, height);
 }
 
+
+/* Higher-level APIs.  */
+
+WL_EXPORT void
+wl_surface_attach_buffer(struct wl_surface *surface,
+			 struct wl_buffer *buffer)
+{
+	return wl_surface_attach(surface, buffer->name,
+				 buffer->width, buffer->height, buffer->stride);
+}
+
+
+WL_EXPORT void
+wl_surface_copy_buffer(struct wl_surface *surface, int32_t dst_x, int32_t dst_y,
+		       struct wl_buffer *src,
+		       int32_t x, int32_t y, int32_t width, int32_t height)
+{
+	wl_surface_copy (surface, dst_x, dst_y, src->name, src->stride,
+			 x, y, width, height);
+}
+

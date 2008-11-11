@@ -22,13 +22,13 @@ wayland : LDLIBS += -ldl -rdynamic
 wayland : $(wayland_objs)
 	gcc -o $@ $(LDLIBS) $(wayland_objs)
 
-libwayland_objs = wayland-client.o connection.o hash.o
+libwayland_objs = wayland-client-gem.o wayland-client.o connection.o hash.o
 
 libwayland.so : $(libwayland_objs)
 
 compositors_objs =  $(sort \
 	$(foreach c,$(patsubst %.so,%,$(compositors)), $($(c)_objs)))
-$(compositors_objs) $(clients_objs) : CFLAGS += $(shell pkg-config --cflags libdrm)
+$(compositors_objs) $(libwayland_objs) : CFLAGS += $(shell pkg-config --cflags libdrm)
 
 $(wayland_objs) $(libwayland_objs) : CFLAGS += $(shell pkg-config --cflags libffi)
 wayland libwayland.so : LDLIBS += -lrt $(shell pkg-config --libs libffi)
@@ -48,7 +48,7 @@ glx-compositor.so : $(glx_compositor_objs)
 libwayland.so $(compositors) :
 	gcc -o $@ $^ $(LDLIBS) -shared 
 
-flower_objs = flower.o wayland-glib.o
+flower_objs = flower.o wayland-glib.o cairo-util.o
 pointer_objs = pointer.o wayland-glib.o cairo-util.o
 background_objs = background.o wayland-glib.o
 window_objs = window.o gears.o wayland-glib.o cairo-util.o
