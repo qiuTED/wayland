@@ -27,10 +27,12 @@ libwayland_objs = wayland-client.o connection.o
 
 libwayland.so : $(libwayland_objs)
 
-$(compositors) $(clients) : CFLAGS += $(shell pkg-config --cflags libdrm)
+compositors_objs =  $(sort \
+	$(foreach c,$(patsubst %.so,%,$(compositors)), $($(c)_objs)))
+$(compositors_objs) $(clients_objs) : CFLAGS += $(shell pkg-config --cflags libdrm)
 
 egl_compositor_objs = egl-compositor.o
-egl-compositor.so : CFLAGS += $(EAGLE_CFLAGS) $(shell pkg-config --cflags libpng)
+$(egl_compositor_objs) : CFLAGS += $(EAGLE_CFLAGS) $(shell pkg-config --cflags libpng)
 egl-compositor.so : LDLIBS += $(EAGLE_LDLIBS) $(shell pkg-config --libs libpng) -rdynamic
 
 egl-compositor.so : $(egl_compositor_objs)
@@ -48,14 +50,15 @@ flower_objs = flower.o wayland-glib.o
 pointer_objs = pointer.o wayland-glib.o cairo-util.o
 background_objs = background.o wayland-glib.o
 window_objs = window.o gears.o wayland-glib.o cairo-util.o
+clients_objs = $(sort $(foreach c,$(clients), $($(c)_objs)))
 
-$(clients) : CFLAGS += $(shell pkg-config --cflags cairo glib-2.0)
+$(clients_objs) : CFLAGS += $(shell pkg-config --cflags cairo glib-2.0)
 $(clients) : LDLIBS += $(shell pkg-config --libs cairo glib-2.0) -lrt
 
-background : CFLAGS += $(shell pkg-config --cflags gdk-pixbuf-2.0)
+background.o : CFLAGS += $(shell pkg-config --cflags gdk-pixbuf-2.0)
 background : LDLIBS += $(shell pkg-config --libs gdk-pixbuf-2.0)
 
-window : CFLAGS += $(EAGLE_CFLAGS)
+window.o : CFLAGS += $(EAGLE_CFLAGS)
 window : LDLIBS += $(EAGLE_LDLIBS)
 
 define client_template
