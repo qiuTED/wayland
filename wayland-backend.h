@@ -38,9 +38,13 @@ EGLSurface wl_backend_get_egl_surface(struct wl_backend *backend,
 
 void wl_backend_destroy(struct wl_backend *backend);
 
+const char *wl_backend_get_name (struct wl_backend *backend);
+const char *wl_backend_get_args (struct wl_backend *backend);
+
 EGLSurface wl_buffer_get_egl_surface(struct wl_buffer *buffer,
 				     EGLConfig config);
 int wl_buffer_destroy(struct wl_buffer *buffer);
 int wl_buffer_data(struct wl_buffer *buffer, void *data);
+
 
 #endif

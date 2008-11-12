@@ -12,6 +12,7 @@
 #include <ffi.h>
 
 #include "wayland.h"
+#include "wayland-backend.h"
 #include "wayland-internal.h"
 #include "hash.h"
 #include "connection.h"
@@ -37,14 +38,6 @@ wl_list_remove(struct wl_list *elm)
 	elm->prev->next = elm->next;
 	elm->next->prev = elm->prev;
 }
-
-struct wl_client {
-	struct wl_connection *connection;
-	struct wl_event_source *source;
-	struct wl_display *display;
-	struct wl_list object_list;
-	struct wl_list link;
-};
 
 static void
 wl_surface_destroy(struct wl_client *client,
@@ -199,7 +192,7 @@ wl_client_connection_data(int fd, uint32_t mask, void *data)
 		return;
 	}
 
-	while (len > sizeof p) {
+	while (len >= sizeof p) {
 		wl_connection_copy(connection, p, sizeof p);
 		opcode = p[1] & 0xffff;
 		size = p[1] >> 16;
@@ -253,17 +246,34 @@ wl_client_connection_update(struct wl_connection *connection,
 static void
 advertise_object(struct wl_client *client, struct wl_object *object)
 {
-	const struct wl_interface *interface;
-	static const char pad[4];
-	uint32_t length, p[2];
+	wl_connection_marshal(client->connection, NULL, object->id, -1, "s",
+			      object->interface->name);
+}
 
-	interface = object->interface;
-	length = strlen(interface->name);
-	p[0] = object->id;
-	p[1] = length;
-	wl_connection_write(client->connection, p, sizeof p);
-	wl_connection_write(client->connection, interface->name, length);
-	wl_connection_write(client->connection, pad, -length & 3);
+static void
+advertise_objects(struct wl_client *client, struct wl_display *display)
+{
+	struct wl_object_ref *ref;
+	struct wl_list *node;
+	uint32_t n;
+
+	node = display->global_objects_list.next;
+	for (n = 0; node != &display->global_objects_list; n++) {
+		ref = container_of(node, struct wl_object_ref, link);
+		node = ref->link.next;
+	}
+
+	wl_connection_write(client->connection, &n, sizeof n);
+	advertise_object(client, &display->base);
+
+	node = display->global_objects_list.next;
+	while (n--) {
+		ref = container_of(node, struct wl_object_ref, link);
+		advertise_object(client, ref->object);
+		node = ref->link.next;
+	}
+
+	wl_connection_data(client->connection, WL_CONNECTION_WRITABLE);
 }
 
 static struct wl_client *
@@ -290,7 +300,7 @@ wl_client_create(struct wl_display *display, int fd)
 			    sizeof display->client_id_range);
 	display->client_id_range += 256;
 
-	advertise_object(client, &display->base);
+	advertise_objects(client, display);
 
 	wl_list_insert(display->client_list.prev, &client->link);
 
@@ -361,23 +371,50 @@ static const struct wl_interface display_interface = {
 static const char input_device_file[] = 
 	"/dev/input/by-id/usb-Apple__Inc._Apple_Internal_Keyboard_._Trackpad-event-mouse";
 
+static int
+wl_display_register_global_object(struct wl_display *display,
+				  struct wl_object *object)
+{
+	struct wl_object_ref *ref;
+
+	ref = malloc(sizeof *ref);
+	if (ref == NULL)
+		return -1;
+
+	ref->object = object;
+	wl_hash_insert(&display->objects, object);
+	wl_list_insert(display->global_objects_list.prev, &ref->link);
+
+	return 0;
+}
+
 static void
 wl_display_create_input_devices(struct wl_display *display)
 {
+	struct wl_object *pointer;
 	const char *path;
 
 	path = getenv("WAYLAND_POINTER");
 	if (path == NULL)
 		path = input_device_file;
 
-	display->pointer = wl_input_device_create(display, path, 1);
-
-	if (display->pointer != NULL)
-		wl_hash_insert(&display->objects, display->pointer);
+	pointer = wl_input_device_create(display, path, 1);
+	if (pointer)
+		wl_display_register_global_object (display, pointer);
 }
 
+static void
+wl_display_create_backend_advertisement(struct wl_display *display)
+{
+	struct wl_object *backend_adv;
+
+	backend_adv = wl_backend_advertisement_create(display, 2);
+	wl_display_register_global_object (display, backend_adv);
+}
+
+
 static struct wl_display *
-wl_display_create(void)
+wl_display_create(struct wl_backend *backend)
 {
 	struct wl_display *display;
 
@@ -385,23 +422,30 @@ wl_display_create(void)
 	if (display == NULL)
 		return NULL;
 
-	display->loop = wl_event_loop_create();
-	if (display->loop == NULL) {
-		free(display);
-		return NULL;
-	}
+	memset (display, 0, sizeof *display);
 
+	display->loop = wl_event_loop_create();
+	if (display->loop == NULL)
+		goto fail;
+
+	display->backend = backend;
 	display->base.id = 0;
 	display->base.interface = &display_interface;
 	wl_hash_insert(&display->objects, &display->base);
 	wl_list_init(&display->surface_list);
 	wl_list_init(&display->client_list);
+	wl_list_init(&display->global_objects_list);
 
+	wl_display_create_backend_advertisement(display);
 	wl_display_create_input_devices(display);
 
 	display->client_id_range = 256; /* Gah, arbitrary... */
 
 	return display;		
+
+fail:
+	free(display);
+	return NULL;
 }
 
 /* TODO: this is inefficient, it marshals data repeatedly!  */
@@ -580,12 +624,26 @@ load_compositor(struct wl_display *display, const char *path)
 	return 0;
 }
 
+#define GEM_DEVICE			 "/dev/dri/card0"
+
 int main(int argc, char *argv[])
 {
 	struct wl_display *display;
+	struct wl_backend *backend;
 	const char *compositor = "./egl-compositor.so";
 
-	display = wl_display_create();
+	backend = wl_backend_create("gem", "i965:" GEM_DEVICE);
+	if (backend == NULL) {
+		fprintf(stderr, "failed to create backend: %m\n");
+		wl_backend_destroy(backend);
+		exit(EXIT_FAILURE);
+	}
+	display = wl_display_create(backend);
+	if (display == NULL) {
+		fprintf(stderr, "failed to create display: %m\n");
+		wl_backend_destroy(backend);
+		exit(EXIT_FAILURE);
+	}
 
 	if (wl_display_add_socket(display)) {
 		fprintf(stderr, "failed to add socket: %m\n");

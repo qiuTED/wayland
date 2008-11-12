@@ -19,6 +19,7 @@ void wl_connection_destroy(struct wl_connection *connection);
 void wl_connection_copy(struct wl_connection *connection, void *data, size_t size);
 void wl_connection_consume(struct wl_connection *connection, size_t size);
 int wl_connection_data(struct wl_connection *connection, uint32_t mask);
+void wl_connection_sync(struct wl_connection *connection);
 void wl_connection_write(struct wl_connection *connection, const void *data, size_t count);
 int wl_connection_demarshal_ffi(struct wl_connection *connection,
 			        struct wl_hash *objects, void (*func)(void),

@@ -18,11 +18,14 @@ static const char socket_name[] = "\0wayland";
 
 struct wl_proxy {
 	struct wl_display *display;
+	struct wl_proxy *next;
 	uint32_t id;
+	char *interface;
 };
 
 struct wl_display {
 	struct wl_proxy proxy;
+	struct wl_proxy *global_objects;
 	struct wl_connection *connection;
 	struct wl_backend *backend;
 	int fd;
@@ -54,69 +57,155 @@ connection_update(struct wl_connection *connection,
 	return 0;
 }
 
+static int
+wl_display_read_proxy (struct wl_display *display, struct wl_proxy *proxy)
+{
+	uint32_t id;
+	wl_connection_sync(display->connection);
+
+	if (!proxy)
+		proxy = malloc (sizeof *proxy);
+
+	proxy->id =
+		wl_connection_demarshal_mem(display->connection, NULL, proxy,
+					    sizeof *proxy, "ppi|s", display,
+					    display->global_objects, 0);
+	display->global_objects = proxy;
+	return id;
+}
+
+WL_EXPORT struct wl_proxy *
+wl_display_get_interface(struct wl_display *display, const char *interface,
+			 struct wl_proxy *prev)
+{
+	struct wl_proxy *proxy;
+	proxy = prev ? prev->next : display->global_objects;
+	while (proxy && strcmp (proxy->interface, interface) != 0)
+		proxy = proxy->next;
+
+	return proxy;
+}
+
+static struct wl_backend *
+wl_display_create_backend(struct wl_display *display, struct wl_proxy *backend_adv)
+{
+	uint32_t id;
+	struct wl_backend *be;
+	struct {
+		char *device, *driver;
+	} reply;
+
+	wl_connection_marshal(display->connection, NULL, backend_adv->id,
+			      0, "");
+	wl_connection_data(display->connection, WL_CONNECTION_WRITABLE);
+	wl_connection_sync(display->connection);
+
+	/* FIXME: we expect no other events to arrive.  */
+	id = wl_connection_demarshal_mem(display->connection, NULL,
+				         &reply, sizeof reply, "|ss");
+	if (id != backend_adv->id)
+		abort ();
+
+	be = wl_backend_create (reply.device, reply.driver);
+	free (reply.device);
+	free (reply.driver);
+	return be;
+}
+
 WL_EXPORT struct wl_display *
 wl_display_create(const char *address)
 {
 	struct wl_display *display;
-	struct wl_backend *backend;
+	struct wl_proxy *backend_adv;
 	struct sockaddr_un name;
 	socklen_t size;
-	char buffer[256];
-	uint32_t id, length;
-
-	backend = wl_backend_create ("gem", NULL);
-	if (backend == NULL)
-		return NULL;
+	size_t n;
 
 	display = malloc(sizeof *display);
 	if (display == NULL)
 		return NULL;
 
 	memset(display, 0, sizeof *display);
-	display->backend = backend;
 	display->fd = socket(PF_LOCAL, SOCK_STREAM, 0);
-	if (display->fd < 0) {
-		free(display);
-		return NULL;
-	}
+	if (display->fd < 0)
+		goto fail;
 
 	name.sun_family = AF_LOCAL;
 	memcpy(name.sun_path, address, strlen(address + 1) + 2);
 
 	size = offsetof (struct sockaddr_un, sun_path) + sizeof socket_name;
 
-	if (connect(display->fd, (struct sockaddr *) &name, size) < 0) {
-		close(display->fd);
-		free(display);
-		return NULL;
-	}
+	if (connect(display->fd, (struct sockaddr *) &name, size) < 0)
+		goto fail;
 
 	/* FIXME: We'll need a protocol for getting a new range, I
 	 * guess... */
 	read(display->fd, &display->id, sizeof display->id);
 
-	/* FIXME: actually discover advertised objects here. */
-	read(display->fd, &id, sizeof id);
-	read(display->fd, &length, sizeof length);
-	read(display->fd, buffer, (length + 3) & ~3);
-
-	display->proxy.display = display;
-	display->proxy.id = id;
-
 	display->connection = wl_connection_create(display->fd,
 						   connection_update,
 						   display);
 
+	read(display->fd, &n, sizeof n);
+	wl_display_read_proxy (display, &display->proxy);
+	while (n--)
+		wl_display_read_proxy (display, NULL);
+
+	for (backend_adv = NULL; ; ) {
+		backend_adv = wl_display_get_interface (display,
+							"backend_advertisement",
+							backend_adv);
+		if (backend_adv == NULL)
+			break;
+
+		display->backend = wl_display_create_backend (display, backend_adv);
+		if (display->backend != NULL)
+			break;
+	}
+
+	if (display->backend == NULL)
+		goto fail;
+
 	return display;
+
+fail:
+	if (display && display->backend)
+		wl_backend_destroy(display->backend);
+	if (display && display->fd != -1)
+		close(display->fd);
+	free(display);
+	return NULL;
 }
 
 WL_EXPORT void
 wl_display_destroy(struct wl_display *display)
 {
+	while (display->global_objects) {
+		struct wl_proxy *next = display->global_objects->next;
+
+		/* Watch out, the display itself is one of the
+		   global objects.  */
+		if (display->global_objects != &display->proxy)
+			free (display->global_objects);
+		display->global_objects = next;
+	}
+
 	wl_backend_destroy(display->backend);
 	wl_connection_destroy(display->connection);
 	close(display->fd);
 	free(display);
+}
+
+WL_EXPORT const char *
+wl_display_get_backend_name (struct wl_display *display)
+{
+	return display->backend->backend_name;
+}
+
+WL_EXPORT const char *
+wl_display_get_backend_args (struct wl_display *display)
+{
+	return display->backend->args;
 }
 
 WL_EXPORT int

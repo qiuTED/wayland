@@ -143,15 +143,17 @@ struct wl_compositor_interface interface = {
 };
 
 static const char fb_device[] = "/dev/fb";
-static const char gem_device[] = "/dev/dri/card0";
 
 struct wl_compositor *
-wl_compositor_create(void)
+wl_compositor_create(struct wl_display *display)
 {
 	struct lame_compositor *lc;
 	struct fb_fix_screeninfo fix;
 	struct fb_var_screeninfo var;
 	int fd;
+
+	if (!strcmp(wl_backend_get_driver(display->backend), "i965"))
+		return NULL;
 
 	lc = malloc(sizeof *lc);
 	if (lc == NULL)
@@ -186,7 +188,7 @@ wl_compositor_create(void)
 		return NULL;
 	}
 
-	lc->gem_fd = open(gem_device, O_RDWR);
+	lc->gem_fd = open(wl_backend_get_device(display->backend), O_RDWR);
 	if (lc->gem_fd < 0) {
 		fprintf(stderr, "failed to open drm device\n");
 		return NULL;

@@ -89,6 +89,18 @@ wl_buffer_data(struct wl_buffer *buffer, void *data)
 }
 
 
+WL_EXPORT const char *
+wl_backend_get_name (struct wl_backend *backend)
+{
+	return backend->backend_name;
+}
+
+WL_EXPORT const char *
+wl_backend_get_args (struct wl_backend *backend)
+{
+	return backend->args;
+}
+
 /* Backend factory.  */
 
 struct wl_backend *

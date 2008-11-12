@@ -25,7 +25,6 @@ struct egl_compositor {
 	EGLContext context;
 	EGLConfig config;
 	struct wl_display *wl_display;
-	int gem_fd;
 	int width, height;
 };
 
@@ -374,8 +373,6 @@ static const struct wl_compositor_interface interface = {
 	notify_surface_damage
 };
 
-static const char gem_device[] = "/dev/dri/card0";
-
 WL_EXPORT struct wl_compositor *
 wl_compositor_create(struct wl_display *display)
 {
@@ -393,7 +390,8 @@ wl_compositor_create(struct wl_display *display)
 	ec->base.interface = &interface;
 	ec->wl_display = display;
 
-	ec->display = eglCreateDisplayNative(gem_device, "i965");
+	ec->display = eglCreateDisplayNative(wl_backend_get_device(display->backend),
+					     wl_backend_get_driver(display->backend));
 	if (ec->display == NULL) {
 		fprintf(stderr, "failed to create display\n");
 		return NULL;
@@ -434,12 +432,6 @@ wl_compositor_create(struct wl_display *display)
 	glOrtho(0, ec->width, ec->height, 0, 0, 1000.0);
 	glMatrixMode(GL_MODELVIEW);
 	glClearColor(0.0, 0.05, 0.2, 0.0);
-
-	ec->gem_fd = open(gem_device, O_RDWR);
-	if (ec->gem_fd < 0) {
-		fprintf(stderr, "failed to open drm device\n");
-		return NULL;
-	}
 
 	signal(SIGUSR1, handle_sigusr1);
 

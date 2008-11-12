@@ -3,6 +3,14 @@
 
 #include "hash.h"
 
+struct wl_client {
+	struct wl_connection *connection;
+	struct wl_event_source *source;
+	struct wl_display *display;
+	struct wl_list object_list;
+	struct wl_list link;
+};
+
 struct wl_display {
 	struct wl_object base;
 	struct wl_event_loop *loop;
@@ -16,9 +24,6 @@ struct wl_display {
 	struct wl_list surface_list;
 	struct wl_list client_list;
 	uint32_t client_id_range;
-
-	int32_t pointer_x;
-	int32_t pointer_y;
 };
 
 struct wl_surface {

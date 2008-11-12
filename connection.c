@@ -83,6 +83,32 @@ wl_connection_consume(struct wl_connection *connection, size_t size)
 	}
 }
 
+void
+wl_connection_sync(struct wl_connection *connection)
+{
+	uint32_t p[2];
+	struct wl_buffer *b;
+	int size, avail, head;
+
+	b = &connection->in;
+	size = sizeof p;
+	do {
+		head = connection->in.head;
+		if (head < b->tail)
+			avail = ARRAY_LENGTH(b->data) - (b->tail - head);
+		else
+			avail = head - b->tail;
+
+		if (avail < size)
+			wl_connection_data(connection, WL_CONNECTION_READABLE);
+		else if (size == sizeof p) {
+			/* If the header is available, get the full size.  */
+			wl_connection_copy(connection, p, sizeof p);
+			size = p[1] >> 16;
+		}
+	} while (avail < size);
+}
+
 int wl_connection_data(struct wl_connection *connection, uint32_t mask)
 {
 	struct wl_buffer *b;

@@ -7,14 +7,16 @@ EAGLE_LDLIBS = $(shell PKG_CONFIG_PATH=$(PKG_CONFIG_PATH) pkg-config --libs eagl
 
 clients = flower pointer background window
 compositors = egl-compositor.so glx-compositor.so
+backends = wayland-backend-gem.o wayland-backend.o
 
 all : wayland libwayland.so $(compositors) $(clients)
 
-wayland_objs =					\
+wayland_objs = $(backends)			\
 	wayland.o				\
 	event-loop.o				\
 	connection.o				\
 	hash.o					\
+	backend-adv.o				\
 	input.o
 
 wayland : LDLIBS += -ldl -rdynamic
@@ -22,17 +24,12 @@ wayland : LDLIBS += -ldl -rdynamic
 wayland : $(wayland_objs)
 	gcc -o $@ $(LDLIBS) $(wayland_objs)
 
-libwayland_objs = wayland-backend.o wayland-backend-gem.o wayland-client.o \
-	connection.o hash.o
+libwayland_objs = $(backends) wayland-client.o connection.o hash.o
 
 libwayland.so : $(libwayland_objs)
 
-compositors_objs =  $(sort \
-	$(foreach c,$(patsubst %.so,%,$(compositors)), $($(c)_objs)))
-$(compositors_objs) $(libwayland_objs) : CFLAGS += $(shell pkg-config --cflags libdrm)
-
-$(wayland_objs) $(libwayland_objs) : CFLAGS += $(shell pkg-config --cflags libffi)
-wayland libwayland.so : LDLIBS += -lrt $(shell pkg-config --libs libffi)
+$(wayland_objs) $(libwayland_objs) : CFLAGS += $(shell pkg-config --cflags libdrm) $(shell pkg-config --cflags libffi)
+wayland libwayland.so : LDLIBS += $(shell pkg-config --libs libffi)
 
 egl_compositor_objs = egl-compositor.o
 $(egl_compositor_objs) : CFLAGS += $(EAGLE_CFLAGS) $(shell pkg-config --cflags libpng)

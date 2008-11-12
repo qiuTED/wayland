@@ -119,6 +119,9 @@ struct wl_object *
 wl_input_device_create(struct wl_display *display,
 		       const char *path, uint32_t id);
 
+struct wl_object *
+wl_backend_advertisement_create(struct wl_display *display, uint32_t id);
+
 struct wl_compositor {
 	const struct wl_compositor_interface *interface;
 };

@@ -15,6 +15,7 @@ struct wl_backend;
 struct wl_display;
 struct wl_surface;
 struct wl_buffer;
+struct wl_proxy;
 
 /* Display functions.  */
 
@@ -25,6 +26,12 @@ typedef int (*wl_display_update_func_t)(uint32_t mask, void *data);
 
 struct wl_display *wl_display_create(const char *address);
 void wl_display_destroy(struct wl_display *display);
+const char *wl_display_get_backend_name(struct wl_display *display);
+const char *wl_display_get_backend_args(struct wl_display *display);
+struct wl_proxy *wl_display_get_interface(struct wl_display *display,
+					  const char *interface,
+					  struct wl_proxy *prev);
+
 int wl_display_get_fd(struct wl_display *display,
 		      wl_display_update_func_t update, void *data);
 

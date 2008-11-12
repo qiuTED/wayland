@@ -235,8 +235,6 @@ static const struct wl_compositor_interface interface = {
 	notify_surface_damage
 };
 
-static const char gem_device[] = "/dev/dri/card0";
-
 static void
 display_data(int fd, uint32_t mask, void *data)
 {
@@ -269,6 +267,9 @@ wl_compositor_create(struct wl_display *display)
 	XVisualInfo *visinfo;
 	int screen;
 	struct wl_event_loop *loop;
+
+	if (!strcmp(wl_backend_get_driver(display->backend), "i965"))
+		return NULL;
 
 	gc = malloc(sizeof *gc);
 	if (gc == NULL)
@@ -316,7 +317,7 @@ wl_compositor_create(struct wl_display *display)
 	glMatrixMode(GL_MODELVIEW);
 	glClearColor(0.0, 0.05, 0.2, 0.0);
 
-	gc->gem_fd = open(gem_device, O_RDWR);
+	gc->gem_fd = open(wl_backend_get_device(display->backend), O_RDWR);
 	if (gc->gem_fd < 0) {
 		fprintf(stderr, "failed to open drm device\n");
 		return NULL;

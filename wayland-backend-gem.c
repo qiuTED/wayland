@@ -163,7 +163,7 @@ wl_gem_open (const char *args)
 	backend->device = device;
 	backend->driver = driver;
 	backend->fd = fd;
-	backend->public.backend_name = "eagle";
+	backend->public.backend_name = "gem";
 	backend->public.args = strdup (args);
 	if (backend->public.args == NULL)
 		goto fail;
