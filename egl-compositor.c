@@ -442,6 +442,7 @@ wl_compositor_init(int argc, char **argv)
 	glOrtho(0, ec->width, ec->height, 0, 0, 1000.0);
 	glMatrixMode(GL_MODELVIEW);
 	glClearColor(0.0, 0.05, 0.2, 0.0);
+	glClear(GL_COLOR_BUFFER_BIT);
 
 	signal(SIGUSR1, handle_sigusr1);
 
