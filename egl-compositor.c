@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdarg.h>
-#include <i915_drm.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <fcntl.h>
@@ -11,10 +10,11 @@
 #include <signal.h>
 #include <png.h>
 
-#include "wayland.h"
-
 #include <GL/gl.h>
 #include <eagle.h>
+
+#include "wayland.h"
+#include "wayland-backend.h"
 
 #define ARRAY_LENGTH(a) (sizeof (a) / sizeof (a)[0])
 
@@ -379,6 +379,7 @@ wl_compositor_create(struct wl_display *display)
 	EGLConfig configs[64];
 	EGLint major, minor, count;
 	struct egl_compositor *ec;
+	struct wl_backend *backend;
 
 	ec = malloc(sizeof *ec);
 	if (ec == NULL)
@@ -390,8 +391,8 @@ wl_compositor_create(struct wl_display *display)
 	ec->base.interface = &interface;
 	ec->wl_display = display;
 
-	ec->display = eglCreateDisplayNative(wl_backend_get_device(display->backend),
-					     wl_backend_get_driver(display->backend));
+	backend = wl_display_get_backend(display);
+	ec->display = wl_backend_get_egl_display(backend);
 	if (ec->display == NULL) {
 		fprintf(stderr, "failed to create display\n");
 		return NULL;

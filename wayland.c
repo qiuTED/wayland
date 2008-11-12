@@ -493,6 +493,12 @@ wl_display_get_event_loop(struct wl_display *display)
 	return display->loop;
 }
 
+WL_EXPORT struct wl_backend *
+wl_display_get_backend(struct wl_display *display)
+{
+	return display->backend;
+}
+
 static void
 wl_display_run(struct wl_display *display)
 {

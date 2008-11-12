@@ -14,7 +14,11 @@ struct wl_backend {
 				       int, int, int);
 	int (*destroy) (struct wl_backend *);
 	struct wl_buffer *(*buffer_create) (struct wl_backend *, int, int, int);
-	int (*buffer_data) (struct wl_buffer *, void *);
+	struct wl_buffer *(*buffer_open) (struct wl_backend *, int, int, int,
+					  int);
+	void *(*buffer_get_data) (struct wl_buffer *);
+	int (*buffer_set_data) (struct wl_buffer *, void *);
+	int (*buffer_free_data) (struct wl_buffer *, void *);
 	int (*buffer_destroy) (struct wl_buffer *);
 };
 
@@ -26,6 +30,9 @@ struct wl_buffer {
 
 struct wl_backend *wl_backend_create (const char *backend_name, const char *args);
 
+struct wl_buffer *wl_backend_open_buffer (struct wl_backend *backend,
+					  int width, int height, int stride,
+					  int name);
 struct wl_buffer *wl_backend_create_buffer (struct wl_backend *backend,
 					    int width, int height, int stride);
 struct wl_buffer *wl_backend_create_buffer_from_data (struct wl_backend *backend,
@@ -44,7 +51,10 @@ const char *wl_backend_get_args (struct wl_backend *backend);
 EGLSurface wl_buffer_get_egl_surface(struct wl_buffer *buffer,
 				     EGLConfig config);
 int wl_buffer_destroy(struct wl_buffer *buffer);
-int wl_buffer_data(struct wl_buffer *buffer, void *data);
+
+void *wl_buffer_get_data(struct wl_buffer *buffer);
+int wl_buffer_set_data(struct wl_buffer *buffer, void *data);
+int wl_buffer_free_data(struct wl_buffer *buffer, void *data);
 
 
 #endif

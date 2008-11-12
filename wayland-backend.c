@@ -52,6 +52,13 @@ wl_buffer_get_egl_surface(struct wl_buffer *buffer, EGLDisplay display,
 }
 
 WL_EXPORT struct wl_buffer *
+wl_backend_open_buffer(struct wl_backend *backend,
+		       int width, int height, int stride, int name)
+{
+	return backend->buffer_open (backend, width, height, stride, name);
+}
+
+WL_EXPORT struct wl_buffer *
 wl_backend_create_buffer(struct wl_backend *backend,
 			 int width, int height, int stride)
 {
@@ -68,7 +75,7 @@ wl_backend_create_buffer_from_data(struct wl_backend *backend,
 	if (buffer == NULL)
 		return NULL;
 
-	if (wl_buffer_data(buffer, data) < 0) {
+	if (wl_buffer_set_data(buffer, data) < 0) {
 		wl_buffer_destroy(buffer);
 		return NULL;
 	}			
@@ -82,10 +89,22 @@ wl_buffer_destroy(struct wl_buffer *buffer)
 	return buffer->backend->buffer_destroy (buffer);
 }
 
-WL_EXPORT int
-wl_buffer_data(struct wl_buffer *buffer, void *data)
+WL_EXPORT void *
+wl_buffer_get_data(struct wl_buffer *buffer)
 {
-	return buffer->backend->buffer_data (buffer, data);
+	return buffer->backend->buffer_get_data (buffer);
+}
+
+WL_EXPORT int
+wl_buffer_set_data(struct wl_buffer *buffer, void *data)
+{
+	return buffer->backend->buffer_set_data (buffer, data);
+}
+
+WL_EXPORT int
+wl_buffer_free_data(struct wl_buffer *buffer, void *data)
+{
+	return buffer->backend->buffer_free_data (buffer, data);
 }
 
 

@@ -104,6 +104,7 @@ void wl_display_vsend_event(struct wl_display *display, struct wl_object *sender
 			    uint32_t event, va_list va);
 void wl_display_send_event(struct wl_display *display, struct wl_object *sender,
 			   uint32_t event, ...);
+struct wl_backend *wl_display_get_backend(struct wl_display *display);
 
 void wl_surface_set_data(struct wl_surface *surface, void *data);
 void *wl_surface_get_data(struct wl_surface *surface);

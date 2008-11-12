@@ -1,19 +1,19 @@
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdint.h>
-#include <i915_drm.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <linux/fb.h>
 #include <X11/Xlib.h>
 #include <X11/keysym.h>
 #include <GL/gl.h>
 #include <GL/glx.h>
 
 #include "wayland.h"
+#include "wayland-backend.h"
 
 #define ARRAY_LENGTH(a) (sizeof (a) / sizeof (a)[0])
 
@@ -23,7 +23,7 @@ struct glx_compositor {
 	GLXContext context;
 	Window window;
 	struct wl_display *wl_display;
-	int gem_fd;
+	struct wl_backend *backend;
 	struct wl_event_source *x_source;
 };
 
@@ -132,49 +132,23 @@ notify_surface_attach(struct wl_compositor *compositor,
 		      uint32_t stride)
 {
 	struct glx_compositor *gc = (struct glx_compositor *) compositor;
+	struct wl_backend *backend;
 	struct surface_data *sd;
-	struct drm_gem_open open_arg;
-	struct drm_gem_close close_arg;
-	struct drm_i915_gem_pread pread;
-	uint32_t size;
+	struct wl_buffer *b;
 	void *data;
-	int ret;
 
+	backend = wl_display_get_backend (gc->wl_display);
 	sd = wl_surface_get_data(surface);
 	if (sd == NULL)
 		return;
 
-	open_arg.name = name;
-	ret = ioctl(gc->gem_fd, DRM_IOCTL_GEM_OPEN, &open_arg);
-	if (ret != 0) {
-		fprintf(stderr,
-			"failed to gem_open name %d, fd=%d: %m\n",
-			name, gc->gem_fd);
-		return;
-	}
-
-	size = height * stride;
-	data = malloc(size);
+	b = wl_backend_open_buffer (backend, width, height, stride, name);
+	data = wl_buffer_get_data (b);
 	if (data == NULL) {
-		fprintf(stderr, "malloc for gem_pread failed\n");
-		return;
-	}
-
-	pread.handle = open_arg.handle;
-	pread.pad = 0;
-	pread.offset = 0;
-	pread.size = size;
-	pread.data_ptr = (long) data;
-
-	if (ioctl(gc->gem_fd, DRM_IOCTL_I915_GEM_PREAD, &pread)) {
-		fprintf(stderr, "gem_pread failed");
-		return;
-	}
-
-	close_arg.handle = open_arg.handle;
-	ret = ioctl(gc->gem_fd, DRM_IOCTL_GEM_CLOSE, &close_arg);
-	if (ret != 0) {
-		fprintf(stderr, "failed to gem_close name %d: %m\n", name);
+                if (errno == ENOMEM)
+			fprintf(stderr, "malloc for gem_pread failed\n");
+		else
+			fprintf(stderr, "gem_pread failed");
 		return;
 	}
 
@@ -186,7 +160,8 @@ notify_surface_attach(struct wl_compositor *compositor,
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
 		     GL_BGRA, GL_UNSIGNED_BYTE, data);
 
-	free(data);
+	wl_buffer_free_data(b, data);
+	wl_buffer_destroy (b);
 
 	schedule_repaint(gc);
 }
@@ -268,9 +243,6 @@ wl_compositor_create(struct wl_display *display)
 	int screen;
 	struct wl_event_loop *loop;
 
-	if (!strcmp(wl_backend_get_driver(display->backend), "i965"))
-		return NULL;
-
 	gc = malloc(sizeof *gc);
 	if (gc == NULL)
 		return NULL;
@@ -316,12 +288,6 @@ wl_compositor_create(struct wl_display *display)
 	glOrtho(0, width, height, 0, 0, 1000.0);
 	glMatrixMode(GL_MODELVIEW);
 	glClearColor(0.0, 0.05, 0.2, 0.0);
-
-	gc->gem_fd = open(wl_backend_get_device(display->backend), O_RDWR);
-	if (gc->gem_fd < 0) {
-		fprintf(stderr, "failed to open drm device\n");
-		return NULL;
-	}
 
 	schedule_repaint(gc);
 

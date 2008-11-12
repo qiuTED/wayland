@@ -37,6 +37,34 @@ wl_gem_destroy (struct wl_backend *b)
 }
 
 static struct wl_buffer *
+wl_gem_buffer_open(struct wl_backend *b, int width, int height, int stride,
+		   int name)
+{
+	struct wl_buffer_private *buffer;
+	struct wl_backend_private *backend = (struct wl_backend_private *) b;
+	struct drm_i915_gem_open open;
+
+	buffer = malloc(sizeof *buffer);
+	buffer->public.backend = b;
+	buffer->public.width = width;
+	buffer->public.height = height;
+	buffer->public.stride = stride;
+
+	memset(&open, 0, sizeof(open));
+	open.name = name;
+	if (ioctl(backend->fd, DRM_IOCTL_GEM_OPEN, &open) != 0) {
+		fprintf(stderr, "gem create failed: %m\n");
+		free(buffer);
+		return NULL;
+	}
+
+	buffer->handle = open.handle;
+	buffer->public.name = name;
+
+	return &buffer->public;
+}
+
+static struct wl_buffer *
 wl_gem_buffer_create(struct wl_backend *b, int width, int height, int stride)
 {
 	struct wl_buffer_private *buffer;
@@ -90,8 +118,44 @@ wl_gem_buffer_destroy(struct wl_buffer *b)
 	return 0;
 }
 
+static void *
+wl_gem_buffer_get_data(struct wl_buffer *b)
+{
+	struct wl_buffer_private *buffer = (struct wl_buffer_private *) b;
+	struct wl_backend_private *backend = (struct wl_backend_private *) b->backend;
+        struct drm_i915_gem_pread pread;
+	uint32_t size;
+	void *data;
+
+	size = b->height * b->stride;
+        data = malloc(size);
+        if (data == NULL) {
+                return NULL;
+        }
+
+        pread.handle = buffer->handle;
+        pread.pad = 0;
+        pread.offset = 0;
+        pread.size = size;
+        pread.data_ptr = (long) data;
+
+        if (ioctl(backend->fd, DRM_IOCTL_I915_GEM_PREAD, &pread)) {
+                free (data);
+                return NULL;
+        }
+
+	return data;
+}
+
 static int
-wl_gem_buffer_data(struct wl_buffer *b, void *data)
+wl_gem_buffer_free_data(struct wl_buffer *b, void *data)
+{
+	free (data);
+	return 0;
+}
+
+static int
+wl_gem_buffer_set_data(struct wl_buffer *b, void *data)
 {
 	struct drm_i915_gem_pwrite pwrite;
 	struct wl_buffer_private *buffer = (struct wl_buffer_private *) b;
@@ -172,7 +236,10 @@ wl_gem_open (const char *args)
 	backend->public.get_egl_display = wl_gem_get_egl_display;
 	backend->public.get_egl_surface = wl_gem_get_egl_surface;
 	backend->public.buffer_create = wl_gem_buffer_create;
-	backend->public.buffer_data = wl_gem_buffer_data;
+	backend->public.buffer_open = wl_gem_buffer_open;
+	backend->public.buffer_get_data = wl_gem_buffer_get_data;
+	backend->public.buffer_set_data = wl_gem_buffer_set_data;
+	backend->public.buffer_free_data = wl_gem_buffer_free_data;
 	backend->public.buffer_destroy = wl_gem_buffer_destroy;
 	return &backend->public;
 
