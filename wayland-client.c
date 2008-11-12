@@ -100,7 +100,7 @@ wl_display_create_backend(struct wl_display *display, struct wl_proxy *backend_a
 	if (id != backend_adv->id)
 		abort ();
 
-	be = _wl_backend_create (reply.device, reply.driver);
+	be = _wl_backend_create (reply.device, reply.driver, 0);
 	free (reply.device);
 	free (reply.driver);
 	return be;

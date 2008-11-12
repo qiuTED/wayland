@@ -586,7 +586,7 @@ wl_surface_iterator_destroy(struct wl_surface_iterator *iterator)
 WL_EXPORT struct wl_backend *
 wl_backend_create(const char *name, const char *args)
 {
-	return _wl_backend_create(name, args);
+	return _wl_backend_create(name, args, 1);
 }
 
 static struct wl_display *

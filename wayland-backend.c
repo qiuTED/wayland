@@ -123,7 +123,7 @@ wl_backend_get_args (struct wl_backend *backend)
 /* Backend factory.  */
 
 struct wl_backend *
-_wl_backend_create (const char *name, const char *args)
+_wl_backend_create (const char *name, const char *args, int server)
 {
 	if (!strcmp (name, "gem"))
 		return wl_gem_open (args);
