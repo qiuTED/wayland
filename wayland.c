@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
+#include <signal.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <dlfcn.h>
@@ -37,6 +38,14 @@ wl_list_remove(struct wl_list *elm)
 {
 	elm->prev->next = elm->next;
 	elm->next->prev = elm->prev;
+}
+
+static volatile sig_atomic_t display_exit;
+
+static void
+sigterm_handler (int sig)
+{
+	display_exit = 1;
 }
 
 static void
@@ -471,6 +480,16 @@ wl_display_send_event(struct wl_display *display, struct wl_object *sender,
 	wl_display_vsend_event (display, sender, opcode, va);
 }
 
+static void
+wl_display_destroy(struct wl_display *display)
+{
+	const struct wl_compositor_interface *interface;
+
+	interface = display->compositor->interface;
+	if (interface->notify_display_destroy)
+		interface->notify_display_destroy(display->compositor, display);
+}
+
 WL_EXPORT struct wl_event_loop *
 wl_display_get_event_loop(struct wl_display *display)
 {
@@ -486,7 +505,10 @@ wl_display_get_backend(struct wl_display *display)
 static void
 wl_display_run(struct wl_display *display)
 {
-	while (1)
+	signal (SIGTERM, sigterm_handler);
+	signal (SIGINT, sigterm_handler);
+	display_exit = 0;
+	while (!display_exit)
 		wl_event_loop_wait(display->loop);
 }
 
@@ -635,6 +657,6 @@ int main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 	wl_display_run(display);
-
+	wl_display_destroy(display);
 	return 0;
 }

@@ -219,6 +219,7 @@ notify_surface_damage(struct wl_compositor *compositor,
 	schedule_repaint(gc);
 }
 
+
 static const struct wl_compositor_interface interface = {
 	notify_surface_create,
 	notify_surface_destroy,

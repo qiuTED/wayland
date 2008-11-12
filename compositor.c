@@ -90,11 +90,26 @@ notify_surface_map(struct wl_compositor *compositor,
 	wl_buffer_free_data(b, data);
 }
 
+static void
+notify_display_destroy(struct wl_compositor *compositor,
+		       struct wl_display *display)
+{
+	struct lame_compositor *lc = (struct lame_compositor *) compositor;
+        struct wl_surface_iterator *iterator;
+        struct wl_surface *surface;
+        iterator = wl_surface_iterator_create(display, 0);
+        while (wl_surface_iterator_next(iterator, &surface))
+		notify_surface_destroy (compositor, surface);
+}
+				   
 struct wl_compositor_interface interface = {
 	notify_surface_create,
 	notify_surface_destroy,
 	notify_surface_attach,
-	notify_surface_map
+	notify_surface_map,
+	NULL, /* notify_surface_copy */
+	NULL, /* notify_surface_damage */
+	notify_display_destroy
 };
 
 static const char fb_device[] = "/dev/fb";

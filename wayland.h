@@ -154,6 +154,9 @@ struct wl_compositor_interface {
 				      struct wl_surface *surface,
 				      int32_t x, int32_t y,
 				      int32_t width, int32_t height);
+
+	void (*notify_display_destroy)(struct wl_compositor *compositor,
+				       struct wl_display *display);
 };
 
 struct wl_display *wl_compositor_init(int argc, char **argv);
