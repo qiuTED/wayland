@@ -125,8 +125,10 @@ wl_backend_get_args (struct wl_backend *backend)
 struct wl_backend *
 _wl_backend_create (const char *name, const char *args, int server)
 {
+#if 0
 	if (!strcmp (name, "gem"))
 		return wl_gem_open (args);
+#endif
 	if (!strcmp (name, "shm"))
 		return wl_shm_open (args, server);
 	return NULL;

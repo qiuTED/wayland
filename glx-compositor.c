@@ -268,7 +268,7 @@ wl_compositor_init(int argc, char **argv)
 		return NULL;
 
 	gc->base.interface = &interface;
-	backend = wl_backend_create("gem", NULL);
+	backend = wl_backend_create("shm", NULL);
 	gc->wl_display = wl_display_create(backend, &gc->base);
 	if (gc->wl_display == NULL) {
 		wl_backend_destroy(backend);

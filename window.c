@@ -42,10 +42,12 @@ struct window {
 
 	GLfloat gears_angle;
 	struct gears *gears;
+#if 0
 	EGLDisplay egl_display;
 	EGLContext context;
 	EGLConfig config;
 	EGLSurface egl_surface;
+#endif
 };
 
 static void
@@ -164,6 +166,7 @@ draw_window(void *data)
 		       buffer->width, buffer->height);
 
 	/* FIXME: Free window->buffer when we receive the ack event. */
+#if 0
 	if (window->egl_display != NULL) {
 		buffer = window->egl_buffer;
 		gears_draw(window->gears, window->gears_angle);
@@ -173,6 +176,7 @@ draw_window(void *data)
 				       buffer,
 				       0, 0, buffer->width, buffer->height);
 	}
+#endif
 
 	window->redraw_scheduled = 0;
 
@@ -291,6 +295,7 @@ window_create(struct wl_display *display)
 	window->state = WINDOW_STABLE;
 	window->background = cairo_pattern_create_rgba (red, green, blue, alpha);
 
+#if 0
 	window->egl_display = wl_display_get_egl_display(display);
 	if (window->egl_display == NULL)
 		return NULL;
@@ -324,6 +329,7 @@ window_create(struct wl_display *display)
 
 	window->gears = gears_create(red, green, blue, alpha);
 	window->gears_angle = 0.0;
+#endif
 
 	return window;
 }

@@ -1,4 +1,4 @@
-CFLAGS = -Wall -g -Wstrict-prototypes -Wmissing-prototypes -fvisibility=hidden
+CFLAGS = -Wall -g -Wstrict-prototypes -Wmissing-prototypes -fvisibility=hidden -I.
 
 PKG_CONFIG_PATH ?= $(HOME)/install/lib/pkgconfig
 
@@ -6,8 +6,8 @@ EAGLE_CFLAGS = $(shell PKG_CONFIG_PATH=$(PKG_CONFIG_PATH) pkg-config --cflags ea
 EAGLE_LDLIBS = $(shell PKG_CONFIG_PATH=$(PKG_CONFIG_PATH) pkg-config --libs eagle)
 
 clients = flower pointer background window
-compositors = egl-compositor.so glx-compositor.so
-backends = wayland-backend-gem.o wayland-backend-shm.o wayland-backend.o
+compositors = glx-compositor.so
+backends = wayland-backend-shm.o wayland-backend.o
 
 all : wayland libwayland.so $(compositors) $(clients)
 
@@ -58,7 +58,7 @@ background.o : CFLAGS += $(shell pkg-config --cflags gdk-pixbuf-2.0)
 background : LDLIBS += $(shell pkg-config --libs gdk-pixbuf-2.0)
 
 window.o : CFLAGS += $(EAGLE_CFLAGS)
-window : LDLIBS += $(EAGLE_LDLIBS)
+window : LDLIBS += $(EAGLE_LDLIBS) -lGL
 
 define client_template
 $(1): $$($(1)_objs) libwayland.so
