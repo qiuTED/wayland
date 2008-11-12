@@ -30,6 +30,8 @@ struct glx_compositor {
 
 struct surface_data {
 	GLuint texture;
+	GLuint width;
+	GLuint height;
 	struct wl_map map;
 };
 
@@ -41,7 +43,7 @@ repaint(void *data)
 	struct wl_surface *surface;
 	struct surface_data *sd;
 	GLint vertices[12];
-	GLint tex_coords[12] = { 0, 0,  0, 1,  1, 0,  1, 1 };
+	GLint tex_coords[12];
 	GLuint indices[4] = { 0, 1, 2, 3 };
 
 	iterator = wl_surface_iterator_create(gc->wl_display, 0);
@@ -53,21 +55,29 @@ repaint(void *data)
 		vertices[0] = sd->map.x;
 		vertices[1] = sd->map.y;
 		vertices[2] = 0;
+ 		tex_coords[0] = 0;
+ 		tex_coords[1] = 0;
 
 		vertices[3] = sd->map.x;
 		vertices[4] = sd->map.y + sd->map.height;
 		vertices[5] = 0;
+ 		tex_coords[2] = 0;
+ 		tex_coords[3] = sd->height;
 
 		vertices[6] = sd->map.x + sd->map.width;
 		vertices[7] = sd->map.y;
 		vertices[8] = 0;
+ 		tex_coords[4] = sd->width;
+ 		tex_coords[5] = 0;
 
 		vertices[9] = sd->map.x + sd->map.width;
 		vertices[10] = sd->map.y + sd->map.height;
 		vertices[11] = 0;
+ 		tex_coords[6] = sd->width;
+ 		tex_coords[7] = sd->height;
 
-		glBindTexture(GL_TEXTURE_2D, sd->texture);
-		glEnable(GL_TEXTURE_2D);
+		glBindTexture(GL_TEXTURE_RECTANGLE_ARB, sd->texture);
+		glEnable(GL_TEXTURE_RECTANGLE_ARB);
 		glEnable(GL_BLEND);
 		/* Assume pre-multiplied alpha for now, this probably
 		 * needs to be a wayland visual type of thing. */
@@ -143,6 +153,8 @@ notify_surface_attach(struct wl_compositor *compositor,
 	if (sd == NULL)
 		return;
 
+	sd->width = width;
+	sd->height = height;
 	b = wl_backend_open_buffer (backend, width, height, stride, name);
 	data = wl_buffer_get_data (b);
 	if (data == NULL) {
@@ -153,16 +165,16 @@ notify_surface_attach(struct wl_compositor *compositor,
 		return;
 	}
 
-	glBindTexture(GL_TEXTURE_2D, sd->texture);
+	glBindTexture(GL_TEXTURE_RECTANGLE_ARB, sd->texture);
 	glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
-	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_R, GL_REPEAT);
-	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameterf(GL_TEXTURE_RECTANGLE_ARB, GL_TEXTURE_WRAP_R, GL_REPEAT);
+	glTexParameterf(GL_TEXTURE_RECTANGLE_ARB, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameterf(GL_TEXTURE_RECTANGLE_ARB, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 #if __BYTE_ORDER == __LITTLE_ENDIAN
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
+	glTexImage2D(GL_TEXTURE_RECTANGLE_ARB, 0, GL_RGBA, width, height, 0,
 		     GL_BGRA, GL_UNSIGNED_BYTE, data);
 #else
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
+	glTexImage2D(GL_TEXTURE_RECTANGLE_ARB, 0, GL_RGBA, width, height, 0,
 		     GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, data);
 #endif
 
