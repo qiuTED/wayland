@@ -43,8 +43,7 @@ repaint(void *data)
 	struct wl_surface *surface;
 	struct surface_data *sd;
 	GLint vertices[12];
-	GLint tex_coords[12];
-	GLuint indices[4] = { 0, 1, 2, 3 };
+	GLint tex_coords[8];
 
 	iterator = wl_surface_iterator_create(gc->wl_display, 0);
 	while (wl_surface_iterator_next(iterator, &surface)) {
@@ -83,11 +82,12 @@ repaint(void *data)
 		 * needs to be a wayland visual type of thing. */
 		glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 
-		glEnableClientState(GL_VERTEX_ARRAY);
-		glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-		glVertexPointer(3, GL_INT, 0, vertices);
-		glTexCoordPointer(2, GL_INT, 0, tex_coords);
-		glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, indices);
+		glBegin (GL_TRIANGLE_STRIP);
+		glTexCoord2iv (&tex_coords[0]); glVertex3iv (&vertices[0]);
+		glTexCoord2iv (&tex_coords[2]); glVertex3iv (&vertices[3]);
+		glTexCoord2iv (&tex_coords[4]); glVertex3iv (&vertices[6]);
+		glTexCoord2iv (&tex_coords[6]); glVertex3iv (&vertices[9]);
+		glEnd ();
 	}
 	wl_surface_iterator_destroy(iterator);
 
@@ -311,7 +311,7 @@ wl_compositor_init(int argc, char **argv)
 	glViewport(0, 0, width, height);
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
-	glOrtho(0, width, height, 0, 0, 1000.0);
+	glOrtho(0, width, height, 0, -1, 1);
 	glMatrixMode(GL_MODELVIEW);
 	glClearColor(0.0, 0.05, 0.2, 0.0);
 	glClear(GL_COLOR_BUFFER_BIT);
