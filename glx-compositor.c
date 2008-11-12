@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
+#include <endian.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <X11/Xlib.h>
@@ -157,8 +158,13 @@ notify_surface_attach(struct wl_compositor *compositor,
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_R, GL_REPEAT);
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+#if __BYTE_ORDER == __LITTLE_ENDIAN
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
 		     GL_BGRA, GL_UNSIGNED_BYTE, data);
+#else
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
+		     GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, data);
+#endif
 
 	wl_buffer_free_data(b, data);
 	wl_buffer_destroy (b);
