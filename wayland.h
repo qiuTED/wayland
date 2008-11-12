@@ -54,6 +54,7 @@ struct wl_event_source *wl_event_loop_add_idle(struct wl_event_loop *loop,
 					       void *data);
 
 struct wl_client;
+struct wl_compositor;
 
 enum {
 	WL_ARGUMENT_UINT32 = 'i',
@@ -99,12 +100,16 @@ struct wl_map {
 	int32_t x, y, width, height;
 };
 
+struct wl_backend *wl_backend_create(const char *name, const char *args);
+
 struct wl_event_loop *wl_display_get_event_loop(struct wl_display *display);
 void wl_display_vsend_event(struct wl_display *display, struct wl_object *sender,
 			    uint32_t event, va_list va);
 void wl_display_send_event(struct wl_display *display, struct wl_object *sender,
 			   uint32_t event, ...);
 struct wl_backend *wl_display_get_backend(struct wl_display *display);
+int wl_display_register_global_object(struct wl_display *display,
+				      struct wl_object *object);
 
 void wl_surface_set_data(struct wl_surface *surface, void *data);
 void *wl_surface_get_data(struct wl_surface *surface);
@@ -116,9 +121,8 @@ int wl_surface_iterator_next(struct wl_surface_iterator *iterator,
 			     struct wl_surface **surface);
 void wl_surface_iterator_destroy(struct wl_surface_iterator *iterator);
 
-struct wl_object *
-wl_input_device_create(struct wl_display *display,
-		       const char *path, uint32_t id);
+struct wl_display *
+wl_display_create(struct wl_backend *backend, struct wl_compositor *compositor);
 
 struct wl_object *
 wl_backend_advertisement_create(struct wl_display *display, uint32_t id);
@@ -152,10 +156,6 @@ struct wl_compositor_interface {
 				      int32_t width, int32_t height);
 };
 
-void wl_display_set_compositor(struct wl_display *display,
-			       struct wl_compositor *compositor);
-
-struct wl_compositor *
-wl_compositor_create(struct wl_display *display);
+struct wl_display *wl_compositor_init(int argc, char **argv);
 
 #endif

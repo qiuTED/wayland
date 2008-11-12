@@ -7,6 +7,7 @@
 #include <linux/input.h>
 
 #include "wayland.h"
+#include "evdev.h"
 
 struct wl_input_device {
 	struct wl_object base;
@@ -174,4 +175,22 @@ wl_input_device_create(struct wl_display *display,
 	}
 
 	return &device->base;
+}
+
+static const char input_device_file[] = 
+	"/dev/input/by-id/usb-Apple__Inc._Apple_Internal_Keyboard_._Trackpad-event-mouse";
+
+void
+create_input_devices(struct wl_display *display)
+{
+	struct wl_object *pointer;
+	const char *path;
+
+	path = getenv("WAYLAND_POINTER");
+	if (path == NULL)
+		path = input_device_file;
+
+	pointer = wl_input_device_create(display, path, 1);
+	if (pointer)
+		wl_display_register_global_object (display, pointer);
 }

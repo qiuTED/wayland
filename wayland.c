@@ -368,10 +368,7 @@ static const struct wl_interface display_interface = {
 	ARRAY_LENGTH(display_events), display_events,
 };
 
-static const char input_device_file[] = 
-	"/dev/input/by-id/usb-Apple__Inc._Apple_Internal_Keyboard_._Trackpad-event-mouse";
-
-static int
+WL_EXPORT int
 wl_display_register_global_object(struct wl_display *display,
 				  struct wl_object *object)
 {
@@ -389,21 +386,6 @@ wl_display_register_global_object(struct wl_display *display,
 }
 
 static void
-wl_display_create_input_devices(struct wl_display *display)
-{
-	struct wl_object *pointer;
-	const char *path;
-
-	path = getenv("WAYLAND_POINTER");
-	if (path == NULL)
-		path = input_device_file;
-
-	pointer = wl_input_device_create(display, path, 1);
-	if (pointer)
-		wl_display_register_global_object (display, pointer);
-}
-
-static void
 wl_display_create_backend_advertisement(struct wl_display *display)
 {
 	struct wl_object *backend_adv;
@@ -413,11 +395,20 @@ wl_display_create_backend_advertisement(struct wl_display *display)
 }
 
 
-static struct wl_display *
-wl_display_create(struct wl_backend *backend)
+WL_EXPORT struct wl_display *
+wl_display_create(struct wl_backend *backend, struct wl_compositor *compositor)
 {
 	struct wl_display *display;
 
+	if (backend == NULL) {
+		fprintf(stderr, "failed to retrieve backend\n");
+		return NULL;
+	}
+
+	if (compositor == NULL) {
+		fprintf(stderr, "failed to retrieve compositor\n");
+		return NULL;
+	}
 	display = malloc(sizeof *display);
 	if (display == NULL)
 		return NULL;
@@ -429,6 +420,7 @@ wl_display_create(struct wl_backend *backend)
 		goto fail;
 
 	display->backend = backend;
+	display->compositor = compositor;
 	display->base.id = 0;
 	display->base.interface = &display_interface;
 	wl_hash_insert(&display->objects, &display->base);
@@ -437,7 +429,6 @@ wl_display_create(struct wl_backend *backend)
 	wl_list_init(&display->global_objects_list);
 
 	wl_display_create_backend_advertisement(display);
-	wl_display_create_input_devices(display);
 
 	display->client_id_range = 256; /* Gah, arbitrary... */
 
@@ -478,13 +469,6 @@ wl_display_send_event(struct wl_display *display, struct wl_object *sender,
 	va_list va;
 	va_start (va, opcode);
 	wl_display_vsend_event (display, sender, opcode, va);
-}
-
-void
-wl_display_set_compositor(struct wl_display *display,
-			  struct wl_compositor *compositor)
-{
-	display->compositor = compositor;
 }
 
 WL_EXPORT struct wl_event_loop *
@@ -599,67 +583,57 @@ wl_surface_iterator_destroy(struct wl_surface_iterator *iterator)
 	free(iterator);
 }
 
-static int
-load_compositor(struct wl_display *display, const char *path)
+WL_EXPORT struct wl_backend *
+wl_backend_create(const char *name, const char *args)
 {
-	struct wl_compositor *(*create)(struct wl_display *display);
-	struct wl_compositor *compositor;
+	return _wl_backend_create(name, args);
+}
+
+static struct wl_display *
+load_compositor(int argc, char *argv[])
+{
+	struct wl_display *(*init)(int, char **);
+	struct wl_display *display;
+	const char *path = argv[0];
 	void *p;
 
 	p = dlopen(path, RTLD_LAZY | RTLD_GLOBAL);
 	if (p == NULL) {
 		fprintf(stderr, "failed to open compositor %s: %s\n",
 			path, dlerror());
-		return -1;
+		return NULL;
 	}
 
-	create = dlsym(p, "wl_compositor_create");
-	if (create == NULL) {
-		fprintf(stderr, "failed to look up compositor constructor\n");
-		return -1;
+	init = dlsym(p, "wl_compositor_init");
+	if (init == NULL) {
+		fprintf(stderr, "failed to look up wl_compositor_init\n");
+		return NULL;
 	}
 		
-	compositor = create(display);
-	if (compositor == NULL) {
-		fprintf(stderr, "couldn't create compositor\n");
-		return -1;
+	display = init(argc, argv);
+	if (display == NULL) {
+		fprintf(stderr, "failed to register display\n");
+		return NULL;
 	}
 
-	wl_display_set_compositor(display, compositor);
-
-	return 0;
+	return display;
 }
-
-#define GEM_DEVICE			 "/dev/dri/card0"
 
 int main(int argc, char *argv[])
 {
 	struct wl_display *display;
-	struct wl_backend *backend;
 	const char *compositor = "./egl-compositor.so";
 
-	backend = wl_backend_create("gem", "i965:" GEM_DEVICE);
-	if (backend == NULL) {
-		fprintf(stderr, "failed to create backend: %m\n");
-		wl_backend_destroy(backend);
-		exit(EXIT_FAILURE);
-	}
-	display = wl_display_create(backend);
-	if (display == NULL) {
-		fprintf(stderr, "failed to create display: %m\n");
-		wl_backend_destroy(backend);
-		exit(EXIT_FAILURE);
-	}
+	if (argc >= 2)
+		compositor = argv[1];
+	else
+		argv[1] = strdup (compositor);
 
+	display = load_compositor(argc - 1, argv + 1);
 	if (wl_display_add_socket(display)) {
 		fprintf(stderr, "failed to add socket: %m\n");
 		exit(EXIT_FAILURE);
 	}
-
-	if (argc == 2)
-		compositor = argv[1];
-	load_compositor(display, compositor);
-
 	wl_display_run(display);
 
 	return 0;

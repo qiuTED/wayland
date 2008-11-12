@@ -16,8 +16,7 @@ wayland_objs = $(backends)			\
 	event-loop.o				\
 	connection.o				\
 	hash.o					\
-	backend-adv.o				\
-	input.o
+	backend-adv.o
 
 wayland : LDLIBS += -ldl -rdynamic
 
@@ -31,7 +30,7 @@ libwayland.so : $(libwayland_objs)
 $(wayland_objs) $(libwayland_objs) : CFLAGS += $(shell pkg-config --cflags libdrm) $(shell pkg-config --cflags libffi)
 wayland libwayland.so : LDLIBS += $(shell pkg-config --libs libffi)
 
-egl_compositor_objs = egl-compositor.o
+egl_compositor_objs = egl-compositor.o evdev.o
 $(egl_compositor_objs) : CFLAGS += $(EAGLE_CFLAGS) $(shell pkg-config --cflags libpng)
 egl-compositor.so : LDLIBS += $(EAGLE_LDLIBS) $(shell pkg-config --libs libpng) -rdynamic
 

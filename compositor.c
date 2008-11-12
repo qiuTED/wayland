@@ -11,6 +11,7 @@
 
 #include "wayland.h"
 #include "wayland-backend.h"
+#include "evdev.h"
 
 struct lame_compositor {
 	struct wl_compositor base;
@@ -98,10 +99,11 @@ struct wl_compositor_interface interface = {
 
 static const char fb_device[] = "/dev/fb";
 
-struct wl_compositor *
-wl_compositor_create(struct wl_display *display)
+struct wl_display *
+wl_compositor_init(int argc, char **argv)
 {
 	struct lame_compositor *lc;
+	struct wl_backend *backend;
 	struct fb_fix_screeninfo fix;
 	struct fb_var_screeninfo var;
 	int fd;
@@ -109,6 +111,7 @@ wl_compositor_create(struct wl_display *display)
 	lc = malloc(sizeof *lc);
 	if (lc == NULL)
 		return NULL;
+
 
 	lc->base.interface = &interface;
 
@@ -128,10 +131,16 @@ wl_compositor_create(struct wl_display *display)
 		return NULL;
 	}
 
+	backend = wl_backend_create("gem", NULL);
+	lc->wl_display = wl_display_create(backend, &lc->base);
+	if (lc->wl_display == NULL) {
+		wl_backend_destroy(backend);
+		return NULL;
+	}
+
 	lc->stride = fix.line_length;
 	lc->width = var.xres;
 	lc->height = var.yres;
-	lc->wl_display = display;
 	lc->fb = mmap(NULL, lc->stride * lc->height,
 		      PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 	close(fd);
@@ -140,5 +149,6 @@ wl_compositor_create(struct wl_display *display)
 		return NULL;
 	}
 
-	return &lc->base;
+	create_input_devices (lc->wl_display);
+	return lc->wl_display;
 }

@@ -15,6 +15,7 @@
 
 #include "wayland.h"
 #include "wayland-backend.h"
+#include "evdev.h"
 
 #define ARRAY_LENGTH(a) (sizeof (a) / sizeof (a)[0])
 
@@ -373,13 +374,14 @@ static const struct wl_compositor_interface interface = {
 	notify_surface_damage
 };
 
-WL_EXPORT struct wl_compositor *
-wl_compositor_create(struct wl_display *display)
+WL_EXPORT struct wl_display *
+wl_compositor_init(int argc, char **argv)
 {
 	EGLConfig configs[64];
 	EGLint major, minor, count;
 	struct egl_compositor *ec;
 	struct wl_backend *backend;
+	struct wl_display *display;
 
 	ec = malloc(sizeof *ec);
 	if (ec == NULL)
@@ -391,7 +393,14 @@ wl_compositor_create(struct wl_display *display)
 	ec->base.interface = &interface;
 	ec->wl_display = display;
 
-	backend = wl_display_get_backend(display);
+	backend = wl_backend_create("gem", NULL);
+	display = wl_display_create(backend, &ec->base);
+	if (display == NULL) {
+		wl_backend_destroy(backend);
+		return NULL;
+	}
+
+	create_input_devices (display);
 	ec->display = wl_backend_get_egl_display(backend);
 	if (ec->display == NULL) {
 		fprintf(stderr, "failed to create display\n");
@@ -438,5 +447,5 @@ wl_compositor_create(struct wl_display *display)
 
 	schedule_repaint(ec);
 
-	return &ec->base;
+	return display;
 }

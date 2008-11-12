@@ -222,8 +222,8 @@ display_data(int fd, uint32_t mask, void *data)
 	}
 }
 
-WL_EXPORT struct wl_compositor *
-wl_compositor_create(struct wl_display *display)
+WL_EXPORT struct wl_display *
+wl_compositor_init(int argc, char **argv)
 {
 	static int attribs[] = {
 		GLX_RGBA,
@@ -242,13 +242,20 @@ wl_compositor_create(struct wl_display *display)
 	XVisualInfo *visinfo;
 	int screen;
 	struct wl_event_loop *loop;
+	struct wl_backend *backend;
 
 	gc = malloc(sizeof *gc);
 	if (gc == NULL)
 		return NULL;
 
 	gc->base.interface = &interface;
-	gc->wl_display = display;
+	backend = wl_backend_create("gem", NULL);
+	gc->wl_display = wl_display_create(backend, &gc->base);
+	if (gc->wl_display == NULL) {
+		wl_backend_destroy(backend);
+		return NULL;
+	}
+
 	gc->display = XOpenDisplay(NULL);
 	if (gc->display == NULL) {
 		free(gc);
@@ -291,5 +298,5 @@ wl_compositor_create(struct wl_display *display)
 
 	schedule_repaint(gc);
 
-	return &gc->base;
+	return gc->wl_display;
 }

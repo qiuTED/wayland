@@ -28,7 +28,7 @@ struct wl_buffer {
         uint32_t name, handle;
 };
 
-struct wl_backend *wl_backend_create (const char *backend_name, const char *args);
+struct wl_backend *_wl_backend_create (const char *backend_name, const char *args);
 
 struct wl_buffer *wl_backend_open_buffer (struct wl_backend *backend,
 					  int width, int height, int stride,
