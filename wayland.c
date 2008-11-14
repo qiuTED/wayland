@@ -109,13 +109,6 @@ wl_surface_attach(struct wl_client *client,
 					 surface, name, width, height, stride);
 }
 
-static const struct wl_argument attach_arguments[] = {
-	{ WL_ARGUMENT_UINT32 },
-	{ WL_ARGUMENT_UINT32 },
-	{ WL_ARGUMENT_UINT32 },
-	{ WL_ARGUMENT_UINT32 },
-};
-
 static void
 wl_surface_map(struct wl_client *client, struct wl_surface *surface,
 	       int32_t x, int32_t y, int32_t width, int32_t height)
@@ -135,13 +128,6 @@ wl_surface_map(struct wl_client *client, struct wl_surface *surface,
 				      surface, &surface->map);
 }
 
-static const struct wl_argument map_arguments[] = {
-	{ WL_ARGUMENT_UINT32 },
-	{ WL_ARGUMENT_UINT32 },
-	{ WL_ARGUMENT_UINT32 },
-	{ WL_ARGUMENT_UINT32 },
-};
-
 static void
 wl_surface_copy(struct wl_client *client, struct wl_surface *surface,
 		int32_t dst_x, int32_t dst_y, uint32_t name, uint32_t stride,
@@ -155,19 +141,6 @@ wl_surface_copy(struct wl_client *client, struct wl_surface *surface,
 				       name, stride, x, y, width, height);
 }
 
-static const struct wl_argument copy_arguments[] = {
-	{ WL_ARGUMENT_UINT32 },
-	{ WL_ARGUMENT_UINT32 },
-	{ WL_ARGUMENT_UINT32 },
-	{ WL_ARGUMENT_UINT32 },
-	{ WL_ARGUMENT_UINT32 },
-	{ WL_ARGUMENT_UINT32 },
-	{ WL_ARGUMENT_UINT32 },
-	{ WL_ARGUMENT_UINT32 },
-	{ WL_ARGUMENT_UINT32 },
-	{ WL_ARGUMENT_UINT32 },
-};
-
 static void
 wl_surface_damage(struct wl_client *client, struct wl_surface *surface,
 		  int32_t x, int32_t y, int32_t width, int32_t height)
@@ -179,24 +152,12 @@ wl_surface_damage(struct wl_client *client, struct wl_surface *surface,
 					 surface, x, y, width, height);
 }
 
-static const struct wl_argument damage_arguments[] = {
-	{ WL_ARGUMENT_UINT32 },
-	{ WL_ARGUMENT_UINT32 },
-	{ WL_ARGUMENT_UINT32 },
-	{ WL_ARGUMENT_UINT32 },
-};
-
 static const struct wl_method surface_methods[] = {
-	{ "destroy", wl_surface_destroy,
-	  0, NULL },
-	{ "attach", wl_surface_attach,
-	  ARRAY_LENGTH(attach_arguments), attach_arguments },
-	{ "map", wl_surface_map,
-	  ARRAY_LENGTH(map_arguments), map_arguments },
-	{ "copy", wl_surface_copy,
-	  ARRAY_LENGTH(copy_arguments), copy_arguments },
-	{ "damage", wl_surface_damage,
-	  ARRAY_LENGTH(damage_arguments), damage_arguments }
+	{ "destroy", wl_surface_destroy, "" },
+	{ "attach", wl_surface_attach, "iiii" },
+	{ "map", wl_surface_map, "iiii" },
+	{ "copy", wl_surface_copy, "iiiiiiii" },
+	{ "damage", wl_surface_damage, "iiii" }
 };
 
 static const struct wl_interface surface_interface = {
@@ -241,6 +202,18 @@ wl_surface_get_data(struct wl_surface *surface)
 void
 wl_client_destroy(struct wl_client *client);
 
+static int
+strchrcmp (const char **pp, char end_p, const char *q)
+{
+	const char *p = *pp;
+	while (*p != end_p && *p != 0 && *q != 0)
+		p++, q++;
+
+	*pp = p;
+	return *p == end_p;
+}
+		
+
 static void
 wl_client_demarshal(struct wl_client *client, struct wl_object *target,
 		    const struct wl_method *method, size_t size)
@@ -249,6 +222,7 @@ wl_client_demarshal(struct wl_client *client, struct wl_object *target,
 	ffi_cif cif;
 	uint32_t *p, result;
 	int i;
+	const char *c;
 	union {
 		uint32_t uint32;
 		const char *string;
@@ -258,11 +232,6 @@ wl_client_demarshal(struct wl_client *client, struct wl_object *target,
 	void *args[20];
 	struct wl_object *object;
 	uint32_t data[64];
-
-	if (method->argument_count > ARRAY_LENGTH(types)) {
-		printf("too many args (%d)\n", method->argument_count);
-		return;
-	}
 
 	if (sizeof data < size) {
 		printf("request too big, should malloc tmp buffer here\n");
@@ -279,45 +248,59 @@ wl_client_demarshal(struct wl_client *client, struct wl_object *target,
 
 	wl_connection_copy(client->connection, data, size);
 	p = &data[2];
-	for (i = 0; i < method->argument_count; i++) {
-		switch (method->arguments[i].type) {
-		case WL_ARGUMENT_UINT32:
-			types[i + 2] = &ffi_type_uint32;
-			values[i + 2].uint32 = *p;
-			p++;
+	c = method->arguments ? method->arguments : "";
+	for (i = 2; *c; i++) {
+		if (i >= ARRAY_LENGTH(types)) {
+			printf("too many args (%d)\n", i);
+			return;
+		}
+
+		switch (*c) {
+		case 'i':
+			types[i] = &ffi_type_uint32;
+			values[i].uint32 = *p;
+			p++, c++;
 			break;
-		case WL_ARGUMENT_STRING:
-			types[i + 2] = &ffi_type_pointer;
+		case 's':
+			types[i] = &ffi_type_pointer;
 			/* FIXME */
-			values[i + 2].uint32 = *p++;
+			values[i].uint32 = *p;
+			p++, c++;
 			break;
-		case WL_ARGUMENT_OBJECT:
-			types[i + 2] = &ffi_type_pointer;
+		case 'o':
+			types[i] = &ffi_type_pointer;
 			object = wl_hash_lookup(&client->display->objects, *p);
 			if (object == NULL)
 				printf("unknown object (%d)\n", *p);
-			if (object->interface != method->arguments[i].data)
-				printf("wrong object type\n");
-			values[i + 2].object = object;
-			p++;
+			p++, c++;
+			values[i].object = object;
 			break;
-		case WL_ARGUMENT_NEW_ID:
-			types[i + 2] = &ffi_type_uint32;
-			values[i + 2].new_id = *p;
+		case '{':
+			types[i] = &ffi_type_pointer;
+			object = wl_hash_lookup(&client->display->objects, *p);
+			if (object == NULL)
+				printf("unknown object (%d)\n", *p);
+			p++, c++;
+			if (!strchrcmp (&c, '}', object->interface->name))
+				printf("wrong object type\n");
+			values[i].object = object;
+			break;
+		case 'O':
+			types[i] = &ffi_type_uint32;
+			values[i].new_id = *p;
 			object = wl_hash_lookup(&client->display->objects, *p);
 			if (object != NULL)
 				printf("object already exists (%d)\n", *p);
-			p++;
+			p++, c++;
 			break;
 		default:
 			printf("unknown type\n");
 			break;
 		}
-		args[i + 2] = &values[i + 2];
+		args[i] = &values[i];
 	}
 
-	ffi_prep_cif(&cif, FFI_DEFAULT_ABI, method->argument_count + 2,
-		     &ffi_type_uint32, types);
+	ffi_prep_cif(&cif, FFI_DEFAULT_ABI, i, &ffi_type_uint32, types);
 	ffi_call(&cif, FFI_FN(method->func), &result, args);
 }
 
@@ -497,13 +480,8 @@ wl_display_create_surface(struct wl_client *client,
 	return 0;
 }
 
-static const struct wl_argument create_surface_arguments[] = {
-	{ WL_ARGUMENT_NEW_ID }
-};
-
 static const struct wl_method display_methods[] = {
-	{ "create_surface", wl_display_create_surface,
-	  ARRAY_LENGTH(create_surface_arguments), create_surface_arguments },
+	{ "create_surface", wl_display_create_surface, "O" }
 };
 
 static const struct wl_event display_events[] = {

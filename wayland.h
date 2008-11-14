@@ -64,26 +64,22 @@ void wl_hash_delete(struct wl_hash *hash, struct wl_object *object);
 struct wl_client;
 
 enum {
-	WL_ARGUMENT_UINT32,
-	WL_ARGUMENT_STRING,
-	WL_ARGUMENT_OBJECT,
-	WL_ARGUMENT_NEW_ID
-};
-
-struct wl_argument {
-	uint32_t type;
-	void *data;
+	WL_ARGUMENT_UINT32 = 'i',
+	WL_ARGUMENT_STRING = 's',
+	WL_ARGUMENT_OBJECT = 'o',
+	WL_ARGUMENT_INTERFACE = '{',
+	WL_ARGUMENT_NEW_ID = 'O'
 };
 
 struct wl_method {
 	const char *name;
 	void *func;
-	int argument_count;
-	const struct wl_argument *arguments;
+	const char *arguments;
 };
 
 struct wl_event {
 	const char *name;
+	const char *arguments;
 };
 
 struct wl_interface {
