@@ -1,5 +1,7 @@
+#include <stdint.h>
 #include <stdlib.h>
 #include "wayland.h"
+#include "hash.h"
 
 int wl_hash_insert(struct wl_hash *hash, struct wl_object *object)
 {

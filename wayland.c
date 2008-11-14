@@ -11,6 +11,8 @@
 #include <ffi.h>
 
 #include "wayland.h"
+#include "wayland-internal.h"
+#include "hash.h"
 #include "connection.h"
 
 void wl_list_init(struct wl_list *list)
@@ -43,45 +45,6 @@ struct wl_client {
 	struct wl_list link;
 };
 
-struct wl_display {
-	struct wl_object base;
-	struct wl_event_loop *loop;
-	struct wl_hash objects;
-
-	struct wl_object *pointer;
-
-	struct wl_compositor *compositor;
-	struct wl_compositor_interface *compositor_interface;
-
-	struct wl_list surface_list;
-	struct wl_list client_list;
-	uint32_t client_id_range;
-};
-
-struct wl_surface {
-	struct wl_object base;
-
-	/* provided by client */
-	int width, height;
-	int buffer;
-	int stride;
-	
-	struct wl_map map;
-	struct wl_list link;
-
-	/* how to convert buffer contents to pixels in screen format;
-	 * yuv->rgb, indexed->rgb, svg->rgb, but mostly just rgb->rgb. */
-
-	/* how to transform/render rectangular contents to polygons. */
-
-	void *compositor_data;
-};
-
-struct wl_object_ref {
-	struct wl_object *object;
-	struct wl_list link;
-};
-				   
 static void
 wl_surface_destroy(struct wl_client *client,
 		   struct wl_surface *surface)
@@ -199,108 +162,6 @@ wl_surface_get_data(struct wl_surface *surface)
 void
 wl_client_destroy(struct wl_client *client);
 
-static int
-strchrcmp (const char **pp, char end_p, const char *q)
-{
-	const char *p = *pp;
-	while (*p != end_p && *p != 0 && *q != 0)
-		p++, q++;
-
-	*pp = p;
-	return *p == end_p;
-}
-		
-
-static void
-wl_client_demarshal(struct wl_client *client, struct wl_object *target,
-		    const struct wl_method *method, size_t size)
-{
-	ffi_type *types[20];
-	ffi_cif cif;
-	uint32_t *p, result;
-	int i;
-	const char *c;
-	union {
-		uint32_t uint32;
-		const char *string;
-		void *object;
-		uint32_t new_id;
-	} values[20];
-	void *args[20];
-	struct wl_object *object;
-	uint32_t data[64];
-
-	if (sizeof data < size) {
-		printf("request too big, should malloc tmp buffer here\n");
-		return;
-	}
-
-	types[0] = &ffi_type_pointer;
-	values[0].object = client;
-	args[0] =  &values[0];
-
-	types[1] = &ffi_type_pointer;
-	values[1].object = target;
-	args[1] =  &values[1];
-
-	wl_connection_copy(client->connection, data, size);
-	p = &data[2];
-	c = method->arguments ? method->arguments : "";
-	for (i = 2; *c; i++) {
-		if (i >= ARRAY_LENGTH(types)) {
-			printf("too many args (%d)\n", i);
-			return;
-		}
-
-		switch (*c) {
-		case 'i':
-			types[i] = &ffi_type_uint32;
-			values[i].uint32 = *p;
-			p++, c++;
-			break;
-		case 's':
-			types[i] = &ffi_type_pointer;
-			/* FIXME */
-			values[i].uint32 = *p;
-			p++, c++;
-			break;
-		case 'o':
-			types[i] = &ffi_type_pointer;
-			object = wl_hash_lookup(&client->display->objects, *p);
-			if (object == NULL)
-				printf("unknown object (%d)\n", *p);
-			p++, c++;
-			values[i].object = object;
-			break;
-		case '{':
-			types[i] = &ffi_type_pointer;
-			object = wl_hash_lookup(&client->display->objects, *p);
-			if (object == NULL)
-				printf("unknown object (%d)\n", *p);
-			p++, c++;
-			if (!strchrcmp (&c, '}', object->interface->name))
-				printf("wrong object type\n");
-			values[i].object = object;
-			break;
-		case 'O':
-			types[i] = &ffi_type_uint32;
-			values[i].new_id = *p;
-			object = wl_hash_lookup(&client->display->objects, *p);
-			if (object != NULL)
-				printf("object already exists (%d)\n", *p);
-			p++, c++;
-			break;
-		default:
-			printf("unknown type\n");
-			break;
-		}
-		args[i] = &values[i];
-	}
-
-	ffi_prep_cif(&cif, FFI_DEFAULT_ABI, i, &ffi_type_uint32, types);
-	ffi_call(&cif, FFI_FN(method->func), &result, args);
-}
-
 static void
 wl_client_event(struct wl_client *client, struct wl_object *object, uint32_t event)
 {
@@ -314,7 +175,6 @@ wl_client_event(struct wl_client *client, struct wl_object *object, uint32_t eve
 #define WL_DISPLAY_INVALID_OBJECT 0
 #define WL_DISPLAY_INVALID_METHOD 1
 #define WL_DISPLAY_NO_MEMORY 2
-
 
 static void
 wl_client_connection_data(int fd, uint32_t mask, void *data)
@@ -364,8 +224,11 @@ wl_client_connection_data(int fd, uint32_t mask, void *data)
 		}
 				
 		method = &object->interface->methods[opcode];
-		wl_client_demarshal(client, object, method, size);
-		wl_connection_consume(connection, size);
+		wl_connection_demarshal_ffi(client->connection,
+					    &client->display->objects,
+					    FFI_FN(method->func),
+					    method->arguments, client, object);
+
 		len -= size;
 	}
 }

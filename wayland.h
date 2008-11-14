@@ -52,20 +52,12 @@ struct wl_event_source *wl_event_loop_add_idle(struct wl_event_loop *loop,
 					       wl_event_loop_idle_func_t func,
 					       void *data);
 
-struct wl_hash {
-	struct wl_object **objects;
-	uint32_t count, alloc, id;
-};
-
-int wl_hash_insert(struct wl_hash *hash, struct wl_object *object);
-struct wl_object *wl_hash_lookup(struct wl_hash *hash, uint32_t id);
-void wl_hash_delete(struct wl_hash *hash, struct wl_object *object);
-
 struct wl_client;
 
 enum {
 	WL_ARGUMENT_UINT32 = 'i',
 	WL_ARGUMENT_STRING = 's',
+	WL_ARGUMENT_POINTER = 'p',
 	WL_ARGUMENT_OBJECT = 'o',
 	WL_ARGUMENT_INTERFACE = '{',
 	WL_ARGUMENT_NEW_ID = 'O'
@@ -82,7 +74,7 @@ struct wl_event {
 	const char *arguments;
 };
 
-#define WL_DEFMETHOD(name, args, func) {name, func, args},
+#define WL_DEFMETHOD(name, args, func) {name, func, "pp|" args },
 #define WL_DEFEVENT(name, args) {name, args},
 
 struct wl_interface {

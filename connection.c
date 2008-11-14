@@ -4,8 +4,11 @@
 #include <stdio.h>
 #include <errno.h>
 #include <sys/uio.h>
+#include <ffi.h>
+#include <stdarg.h>
 
 #include "connection.h"
+#include "hash.h"
 
 #define ARRAY_LENGTH(a) (sizeof (a) / sizeof (a)[0])
 
@@ -190,4 +193,182 @@ wl_connection_write(struct wl_connection *connection, const void *data, size_t c
 				   WL_CONNECTION_READABLE |
 				   WL_CONNECTION_WRITABLE,
 				   connection->data);
+}
+
+static int
+strchrcmp (const char **pp, char end_p, const char *q)
+{
+	const char *p = *pp;
+	while (*p != end_p && *p != 0 && *q != 0)
+		p++, q++;
+
+	*pp = p;
+	return *p == end_p;
+}
+		
+
+int
+wl_connection_demarshal_ffi(struct wl_connection *connection,
+			    struct wl_hash *objects,
+			    void (*func)(void), const char *arguments, ...)
+{
+	ffi_type *types[20];
+	ffi_cif cif;
+	uint32_t result, id;
+	uint32_t *p;
+	int i, size;
+	const char *c;
+	union {
+		uint32_t uint32;
+		const char *string;
+		void *object;
+		uint32_t new_id;
+	} values[20];
+	void *args[20];
+	struct wl_object *object;
+	uint32_t data[64];
+	va_list va;
+
+	va_start (va, arguments);
+	for (i = 0, c = arguments; *c && *c != '|'; i++) {
+		if (i >= ARRAY_LENGTH(types)) {
+			printf("too many args (%d)\n", i);
+			return -1;
+		}
+
+		switch (*c) {
+		case 'i':
+			types[i] = &ffi_type_uint32;
+			values[i].uint32 = va_arg (va, int);
+			c++;
+			break;
+		case 'p':
+			types[i] = &ffi_type_pointer;
+			values[i].object = va_arg (va, void *);
+			c++;
+			break;
+		case 's':
+			types[i] = &ffi_type_pointer;
+			values[i].string = va_arg (va, char *);
+			values[i].string = strdup (values[i].object);
+			c++;
+			break;
+		case 'o':
+			types[i] = &ffi_type_pointer;
+			id = va_arg (va, int);
+			object = wl_hash_lookup(objects, id);
+			if (object == NULL)
+				printf("unknown object (%d)\n", id);
+			c++;
+			values[i].object = object;
+			break;
+#if 0
+		case '{':
+			types[i] = &ffi_type_pointer;
+			id = va_arg (va, int);
+			object = wl_hash_lookup(objects, id);
+			if (object == NULL)
+				printf("unknown object (%d)\n", id);
+			c++;
+			if (!strchrcmp (&c, '}', object->interface->name))
+				printf("wrong object type\n");
+			values[i].object = object;
+			break;
+#endif
+		case 'O':
+			types[i] = &ffi_type_uint32;
+			values[i].new_id = id = va_arg (va, int);
+			object = wl_hash_lookup(objects, id);
+			if (object != NULL)
+				printf("object already exists (%d)\n", id);
+			c++;
+			break;
+		default:
+			printf("unknown type %c\n", *c++);
+			break;
+		}
+		args[i] = &values[i];
+	}
+
+	if (*c == '|')
+		c++;
+
+	if (connection) {
+		wl_connection_copy(connection, data, 2 * sizeof (data[0]));
+		id = data[0];
+		size = data[1] >> 16;
+
+		if (sizeof data < size) {
+			printf("request too big, should malloc tmp buffer here\n");
+			return -1;
+		}
+		wl_connection_copy(connection, data, size);
+		wl_connection_consume(connection, size);
+	} else
+		id = -1, size = 0;
+		
+	for (p = &data[2]; *c; i++) {
+		if ((p - data) * sizeof (data[0]) >= size) {
+			printf("incomplete packet\n");
+			return -1;
+		}
+		if (i >= ARRAY_LENGTH(types)) {
+			printf("too many args (%d)\n", i);
+			return -1;
+		}
+
+		switch (*c) {
+		case 'i':
+			types[i] = &ffi_type_uint32;
+			values[i].uint32 = *p;
+			p++, c++;
+			break;
+		case 's': {
+			int length = *p++;
+			char *s = malloc (length + 1);
+			memcpy (s, p, length);
+			s[length] = 0;
+			p += (length + 3) >> 2, c++;
+			types[i] = &ffi_type_pointer;
+			values[i].object = s;
+			break;
+		}
+		case 'o':
+			types[i] = &ffi_type_pointer;
+			object = wl_hash_lookup(objects, *p);
+			if (object == NULL)
+				printf("unknown object (%d)\n", *p);
+			p++, c++;
+			values[i].object = object;
+			break;
+#if 0
+		case '{':
+			types[i] = &ffi_type_pointer;
+			object = wl_hash_lookup(objects, *p);
+			if (object == NULL)
+				printf("unknown object (%d)\n", *p);
+			p++, c++;
+			if (!strchrcmp (&c, '}', object->interface->name))
+				printf("wrong object type\n");
+			values[i].object = object;
+			break;
+#endif
+		case 'O':
+			types[i] = &ffi_type_uint32;
+			values[i].new_id = *p;
+			object = wl_hash_lookup(objects, *p);
+			if (object != NULL)
+				printf("object already exists (%d)\n", *p);
+			p++, c++;
+			break;
+		default:
+			printf("unknown type %c\n", *c++);
+			break;
+		}
+		args[i] = &values[i];
+	}
+
+	ffi_prep_cif(&cif, FFI_DEFAULT_ABI, i, &ffi_type_uint32, types);
+	ffi_call(&cif, func, &result, args);
+	return id;
 }

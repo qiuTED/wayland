@@ -17,19 +17,21 @@ wayland_objs =					\
 	hash.o					\
 	input.o
 
-wayland : CFLAGS += $(shell pkg-config --cflags libffi)
-wayland : LDLIBS += $(shell pkg-config --libs libffi) -ldl -rdynamic
+wayland : LDLIBS += -ldl -rdynamic
 
 wayland : $(wayland_objs)
 	gcc -o $@ $(LDLIBS) $(wayland_objs)
 
-libwayland_objs = wayland-client.o connection.o
+libwayland_objs = wayland-client.o connection.o hash.o
 
 libwayland.so : $(libwayland_objs)
 
 compositors_objs =  $(sort \
 	$(foreach c,$(patsubst %.so,%,$(compositors)), $($(c)_objs)))
 $(compositors_objs) $(clients_objs) : CFLAGS += $(shell pkg-config --cflags libdrm)
+
+$(wayland_objs) $(libwayland_objs) : CFLAGS += $(shell pkg-config --cflags libffi)
+wayland libwayland.so : LDLIBS += -lrt $(shell pkg-config --libs libffi)
 
 egl_compositor_objs = egl-compositor.o
 $(egl_compositor_objs) : CFLAGS += $(EAGLE_CFLAGS) $(shell pkg-config --cflags libpng)
