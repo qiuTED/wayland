@@ -150,11 +150,11 @@ wl_surface_damage(struct wl_client *client, struct wl_surface *surface,
 }
 
 static const struct wl_method surface_methods[] = {
-	{ "destroy", wl_surface_destroy, "" },
-	{ "attach", wl_surface_attach, "iiii" },
-	{ "map", wl_surface_map, "iiii" },
-	{ "copy", wl_surface_copy, "iiiiiiii" },
-	{ "damage", wl_surface_damage, "iiii" }
+	WL_DEFMETHOD ("destroy", "", wl_surface_destroy)
+	WL_DEFMETHOD ("attach", "iiii", wl_surface_attach)
+	WL_DEFMETHOD ("map", "iiii", wl_surface_map)
+	WL_DEFMETHOD ("copy", "iiiiiiii", wl_surface_copy)
+	WL_DEFMETHOD ("damage", "iiii", wl_surface_damage)
 };
 
 static const struct wl_interface surface_interface = {
@@ -314,6 +314,7 @@ wl_client_event(struct wl_client *client, struct wl_object *object, uint32_t eve
 #define WL_DISPLAY_INVALID_OBJECT 0
 #define WL_DISPLAY_INVALID_METHOD 1
 #define WL_DISPLAY_NO_MEMORY 2
+
 
 static void
 wl_client_connection_data(int fd, uint32_t mask, void *data)
@@ -478,12 +479,13 @@ wl_display_create_surface(struct wl_client *client,
 }
 
 static const struct wl_method display_methods[] = {
-	{ "create_surface", wl_display_create_surface, "O" }
+	WL_DEFMETHOD ("create_surface", "O", wl_display_create_surface)
 };
 
 static const struct wl_event display_events[] = {
-	{ "invalid_object" },
-	{ "invalid_method" },
+	WL_DEFEVENT ("invalid_object", "")
+	WL_DEFEVENT ("invalid_method", "")
+	WL_DEFEVENT ("no_memory", "")
 };
 
 static const struct wl_interface display_interface = {

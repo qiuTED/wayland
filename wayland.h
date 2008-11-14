@@ -82,6 +82,9 @@ struct wl_event {
 	const char *arguments;
 };
 
+#define WL_DEFMETHOD(name, args, func) {name, func, args},
+#define WL_DEFEVENT(name, args) {name, args},
+
 struct wl_interface {
 	const char *name;
 	int version;

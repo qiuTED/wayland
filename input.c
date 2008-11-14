@@ -18,8 +18,8 @@ struct wl_input_device {
 };
 
 static const struct wl_event input_device_events[] = {
-	{ "motion", "ii" }, 
-	{ "button", "ii" }, 
+	WL_DEFEVENT ("motion", "ii")
+	WL_DEFEVENT ("button", "ii")
 };
 
 static const struct wl_interface input_device_interface = {
