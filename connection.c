@@ -274,9 +274,11 @@ wl_connection_vmarshal(struct wl_connection *connection,
 #endif
 		case 'O':
 			values[i].uint32 = id = va_arg (va, int);
-			object = wl_hash_lookup(objects, id);
-			if (object != NULL)
-				printf("object already exists (%d)\n", id);
+			if (objects != NULL) {
+				object = wl_hash_lookup(objects, id);
+				if (object != NULL)
+					printf("object already exists (%d)\n", id);
+			}
 			size += sizeof (uint32_t);
 			c++;
 			break;
@@ -388,9 +390,11 @@ wl_connection_demarshal_ffi(struct wl_connection *connection,
 		case 'O':
 			types[i] = &ffi_type_uint32;
 			values[i].new_id = id = va_arg (va, int);
-			object = wl_hash_lookup(objects, id);
-			if (object != NULL)
-				printf("object already exists (%d)\n", id);
+			if (objects != NULL) {
+				object = wl_hash_lookup(objects, id);
+				if (object != NULL)
+					printf("object already exists (%d)\n", id);
+			}
 			c++;
 			break;
 		default:
@@ -466,9 +470,11 @@ wl_connection_demarshal_ffi(struct wl_connection *connection,
 		case 'O':
 			types[i] = &ffi_type_uint32;
 			values[i].new_id = *p;
-			object = wl_hash_lookup(objects, *p);
-			if (object != NULL)
-				printf("object already exists (%d)\n", *p);
+			if (objects != NULL) {
+				object = wl_hash_lookup(objects, *p);
+				if (object != NULL)
+					printf("object already exists (%d)\n", *p);
+			}
 			p++, c++;
 			break;
 		default:

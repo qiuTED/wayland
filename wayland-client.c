@@ -177,7 +177,6 @@ WL_EXPORT struct wl_surface *
 wl_display_create_surface(struct wl_display *display)
 {
 	struct wl_surface *surface;
-	uint32_t request[3];
 
 	surface = malloc(sizeof *surface);
 	if (surface == NULL)
@@ -186,13 +185,11 @@ wl_display_create_surface(struct wl_display *display)
 	surface->proxy.id = display->id++;
 	surface->proxy.display = display;
 
-	request[0] = display->proxy.id;
-	request[1] = WL_DISPLAY_CREATE_SURFACE | ((sizeof request) << 16);
-	request[2] = surface->proxy.id;
-	wl_connection_write(display->connection, request, sizeof request);
-
+	wl_connection_marshal(display->connection, NULL, display->proxy.id,
+			      WL_DISPLAY_CREATE_SURFACE, "O", surface->proxy.id);
 	return surface;
 }
+
 
 #define WL_SURFACE_DESTROY	0
 #define WL_SURFACE_ATTACH	1
@@ -203,47 +200,26 @@ wl_display_create_surface(struct wl_display *display)
 WL_EXPORT void
 wl_surface_destroy(struct wl_surface *surface)
 {
-	uint32_t request[2];
-
-	request[0] = surface->proxy.id;
-	request[1] = WL_SURFACE_DESTROY | ((sizeof request) << 16);
-
-	wl_connection_write(surface->proxy.display->connection,
-			    request, sizeof request);
+	wl_connection_marshal(surface->proxy.display->connection, NULL,
+			      surface->proxy.id, WL_SURFACE_DESTROY, "");
 }
 
 WL_EXPORT void
 wl_surface_attach(struct wl_surface *surface, uint32_t name,
 		  int32_t width, int32_t height, uint32_t stride)
 {
-	uint32_t request[6];
-
-	request[0] = surface->proxy.id;
-	request[1] = WL_SURFACE_ATTACH | ((sizeof request) << 16);
-	request[2] = name;
-	request[3] = width;
-	request[4] = height;
-	request[5] = stride;
-
-	wl_connection_write(surface->proxy.display->connection,
-			    request, sizeof request);
+	wl_connection_marshal(surface->proxy.display->connection, NULL,
+			      surface->proxy.id, WL_SURFACE_ATTACH, "iiii",
+			      name, width, height, stride);
 }
 
 WL_EXPORT void
 wl_surface_map(struct wl_surface *surface,
 	       int32_t x, int32_t y, int32_t width, int32_t height)
 {
-	uint32_t request[6];
-
-	request[0] = surface->proxy.id;
-	request[1] = WL_SURFACE_MAP | ((sizeof request) << 16);
-	request[2] = x;
-	request[3] = y;
-	request[4] = width;
-	request[5] = height;
-
-	wl_connection_write(surface->proxy.display->connection,
-			    request, sizeof request);
+	wl_connection_marshal(surface->proxy.display->connection, NULL,
+			      surface->proxy.id, WL_SURFACE_MAP, "iiii",
+			      x, y, width, height);
 }
 
 WL_EXPORT void
@@ -251,37 +227,17 @@ wl_surface_copy(struct wl_surface *surface, int32_t dst_x, int32_t dst_y,
 		uint32_t name, uint32_t stride,
 		int32_t x, int32_t y, int32_t width, int32_t height)
 {
-	uint32_t request[10];
-
-	request[0] = surface->proxy.id;
-	request[1] = WL_SURFACE_COPY | ((sizeof request) << 16);
-	request[2] = dst_x;
-	request[3] = dst_y;
-	request[4] = name;
-	request[5] = stride;
-	request[6] = x;
-	request[7] = y;
-	request[8] = width;
-	request[9] = height;
-
-	wl_connection_write(surface->proxy.display->connection,
-			    request, sizeof request);
+	wl_connection_marshal(surface->proxy.display->connection, NULL,
+			      surface->proxy.id, WL_SURFACE_COPY, "iiiiiiii",
+			      dst_x, dst_y, name, stride, x, y, width, height);
 }
 
 WL_EXPORT void
 wl_surface_damage(struct wl_surface *surface,
 		  int32_t x, int32_t y, int32_t width, int32_t height)
 {
-	uint32_t request[6];
-
-	request[0] = surface->proxy.id;
-	request[1] = WL_SURFACE_DAMAGE | ((sizeof request) << 16);
-	request[2] = x;
-	request[3] = y;
-	request[4] = width;
-	request[5] = height;
-
-	wl_connection_write(surface->proxy.display->connection,
-			    request, sizeof request);
+	wl_connection_marshal(surface->proxy.display->connection, NULL,
+			      surface->proxy.id, WL_SURFACE_DAMAGE, "iiii",
+			      x, y, width, height);
 }
 
