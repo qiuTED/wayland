@@ -56,9 +56,6 @@ struct wl_display {
 	struct wl_list surface_list;
 	struct wl_list client_list;
 	uint32_t client_id_range;
-
-	int32_t pointer_x;
-	int32_t pointer_y;
 };
 
 struct wl_surface {
@@ -511,9 +508,6 @@ wl_display_create_input_devices(struct wl_display *display)
 
 	if (display->pointer != NULL)
 		wl_hash_insert(&display->objects, display->pointer);
-
-	display->pointer_x = 100;
-	display->pointer_y = 100;
 }
 
 static struct wl_display *
@@ -544,7 +538,7 @@ wl_display_create(void)
 	return display;		
 }
 
-static void
+WL_EXPORT void
 wl_display_send_event(struct wl_display *display, uint32_t *data, size_t size)
 {
 	struct wl_client *client;
@@ -557,57 +551,6 @@ wl_display_send_event(struct wl_display *display, uint32_t *data, size_t size)
 		client = container_of(client->link.next,
 				   struct wl_client, link);
 	}
-}
-
-#define WL_POINTER_MOTION 0
-#define WL_POINTER_BUTTON 1
-
-void
-wl_display_post_relative_event(struct wl_display *display,
-			       struct wl_object *source, int dx, int dy)
-{
-	uint32_t p[4];
-
-	display->pointer_x += dx;
-	display->pointer_y += dy;
-
-	p[0] = source->id;
-	p[1] = (sizeof p << 16) | WL_POINTER_MOTION;
-	p[2] = display->pointer_x;
-	p[3] = display->pointer_y;
-
-	wl_display_send_event(display, p, sizeof p);
-}
-
-void
-wl_display_post_absolute_event(struct wl_display *display,
-			       struct wl_object *source, int x, int y)
-{
-	uint32_t p[4];
-
-	display->pointer_x = x;
-	display->pointer_y = y;
-
-	p[0] = source->id;
-	p[1] = (sizeof p << 16) | WL_POINTER_MOTION;
-	p[2] = display->pointer_x;
-	p[3] = display->pointer_y;
-
-	wl_display_send_event(display, p, sizeof p);
-}
-
-void
-wl_display_post_button_event(struct wl_display *display,
-			     struct wl_object *source, int button, int state)
-{
-	uint32_t p[4];
-
-	p[0] = source->id;
-	p[1] = (sizeof p << 16) | WL_POINTER_BUTTON;
-	p[2] = button;
-	p[3] = state;
-
-	wl_display_send_event(display, p, sizeof p);
 }
 
 void

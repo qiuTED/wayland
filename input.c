@@ -17,21 +17,58 @@ struct wl_input_device {
 	int32_t x, y;
 };
 
-static const struct wl_method input_device_methods[] = {
+static const struct wl_event input_device_events[] = {
+	{ "motion", "ii" }, 
+	{ "button", "ii" }, 
 };
 
 static const struct wl_interface input_device_interface = {
 	"input_device", 1,
-	ARRAY_LENGTH(input_device_methods),
-	input_device_methods,
+	0, NULL,
+	ARRAY_LENGTH(input_device_events),
+	input_device_events,
 };
+
+#define WL_POINTER_MOTION 0
+#define WL_POINTER_BUTTON 1
+
+static void
+wl_input_device_post_motion_event(struct wl_input_device *device, int x, int y)
+{
+	uint32_t p[4];
+
+	p[0] = device->base.id;
+	p[1] = (sizeof p << 16) | WL_POINTER_MOTION;
+	p[2] = x;
+	p[3] = y;
+
+	wl_display_send_event(device->display, p, sizeof p);
+}
+
+
+static void
+wl_input_device_post_button_event(struct wl_input_device *device,
+				  int button, int state)
+{
+	uint32_t p[4];
+
+	p[0] = device->base.id;
+	p[1] = (sizeof p << 16) | WL_POINTER_BUTTON;
+	p[2] = button;
+	p[3] = state;
+
+	wl_display_send_event(device->display, p, sizeof p);
+}
+
 
 static void wl_input_device_data(int fd, uint32_t mask, void *data)
 {
 	struct wl_input_device *device = data;
 	struct input_event ev[8], *e, *end;
-	int len, value, dx, dy, absolute_event;
+	int len, value, dx, dy, new_x, new_y, absolute_event;
 
+	new_x = 0;
+	new_y = 0;
 	dx = 0;
 	dy = 0;
 	absolute_event = 0;
@@ -64,10 +101,10 @@ static void wl_input_device_data(int fd, uint32_t mask, void *data)
 		        absolute_event = 1;
 			switch (e->code) {
 			case ABS_X:
-				device->x = value;
+				new_x = value;
 				break;
 			case ABS_Y:
-				device->y = value;
+				new_y = value;
 				break;
 			}
 
@@ -89,30 +126,30 @@ static void wl_input_device_data(int fd, uint32_t mask, void *data)
 				break;
 
 			case BTN_LEFT:
-				wl_display_post_button_event(device->display,
-							     &device->base, 0, value);
+				wl_input_device_post_button_event(device, 0, value);
 				break;
 
 			case BTN_RIGHT:
-				wl_display_post_button_event(device->display,
-							     &device->base, 2, value);
+				wl_input_device_post_button_event(device, 2, value);
 				break;
 
 			case BTN_MIDDLE:
-				wl_display_post_button_event(device->display,
-							     &device->base, 1, value);
+				wl_input_device_post_button_event(device, 1, value);
 				break;
 			}
 		}
 	}
 
-	if (dx != 0 || dy != 0)
-		wl_display_post_relative_event(device->display,
-					       &device->base, dx, dy);
-	if (absolute_event && device->tool)
-		wl_display_post_absolute_event(device->display,
-					       &device->base,
-					       device->x, device->y);
+	if (dx != 0 || dy != 0) {
+		device->x += dx;	
+		device->y += dy;	
+		wl_input_device_post_motion_event(device, device->x, device->y);
+	}
+	if (absolute_event && device->tool) {
+		device->x = new_x;	
+		device->y = new_y;	
+		wl_input_device_post_motion_event(device, device->x, device->y);
+	}
 }
 
 struct wl_object *
