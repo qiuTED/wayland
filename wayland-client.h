@@ -15,7 +15,13 @@ struct wl_backend;
 struct wl_display;
 struct wl_surface;
 struct wl_buffer;
-struct wl_proxy;
+
+struct wl_proxy {
+	struct wl_display *display;
+	struct wl_proxy *next;
+	uint32_t id;
+	char *interface;
+};
 
 /* Display functions.  */
 
@@ -38,7 +44,7 @@ int wl_display_get_fd(struct wl_display *display,
 void wl_display_iterate(struct wl_display *display, uint32_t mask);
 
 typedef void (*wl_display_event_func_t)(struct wl_display *display,
-					uint32_t opcode,
+					uint32_t id, uint32_t opcode,
 					uint32_t arg1, uint32_t arg2,
 					void *data);
 

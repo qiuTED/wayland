@@ -1,3 +1,4 @@
+#include <alloca.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -15,13 +16,6 @@
 #include "wayland-backend.h"
 
 static const char socket_name[] = "\0wayland";
-
-struct wl_proxy {
-	struct wl_display *display;
-	struct wl_proxy *next;
-	uint32_t id;
-	char *interface;
-};
 
 struct wl_display {
 	struct wl_proxy proxy;
@@ -221,14 +215,18 @@ wl_display_get_fd(struct wl_display *display,
 }
 
 static void
-handle_event(struct wl_display *display, uint32_t opcode, uint32_t size)
+handle_event(struct wl_display *display, uint32_t id, uint32_t opcode,
+	     uint32_t size)
 {
-	uint32_t p[4];
+	if (size < 4096) {
+		uint32_t *p = alloca (size);
 
-	wl_connection_copy(display->connection, p, size);
-	if (display->event_handler != NULL)
-		display->event_handler(display, opcode, p[2], p[3],
-				       display->event_handler_data);
+		wl_connection_copy(display->connection, p, size);
+		if (display->event_handler != NULL)
+			display->event_handler(display, id, opcode, p[2], p[3],
+					       display->event_handler_data);
+	}
+
 	wl_connection_consume(display->connection, size);
 }
 
@@ -249,7 +247,7 @@ wl_display_iterate(struct wl_display *display, uint32_t mask)
 		if (len < size)
 			break;
 
-		handle_event(display, opcode, size);
+		handle_event(display, p[0], opcode, size);
 		len -= size;
 	}
 

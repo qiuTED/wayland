@@ -59,17 +59,18 @@ draw_pointer(int width, int height)
 
 struct pointer {
 	int width, height;
+	struct wl_proxy *pointer;
 	struct wl_surface *surface;
 };
 
 static void
 event_handler(struct wl_display *display,
-	      uint32_t opcode,
+	      uint32_t id, uint32_t opcode,
 	      uint32_t arg1, uint32_t arg2, void *data)
 {
 	struct pointer *pointer = data;
 
-	if (opcode == 0)
+	if (pointer->pointer != NULL && id == pointer->pointer->id && opcode == 0)
 		wl_surface_map(pointer->surface, arg1, arg2, pointer->width, pointer->height);
 }
 
@@ -92,6 +93,8 @@ int main(int argc, char *argv[])
 	source = wayland_source_new(display);
 	g_source_attach(source, NULL);
 
+	pointer.pointer = wl_display_get_interface (display, "input_device",
+						    NULL);
 	pointer.width = 48;
 	pointer.height = 48;
 	pointer.surface = wl_display_create_surface(display);

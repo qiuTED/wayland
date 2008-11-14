@@ -29,6 +29,7 @@ static void die(const char *msg)
 struct window {
 	struct wl_display *display;
 	struct wl_surface *surface;
+	struct wl_proxy *pointer;
 	int x, y, width, height;
 	int drag_x, drag_y, last_x, last_y;
 	int state;
@@ -197,12 +198,15 @@ enum location {
 };
 
 static void
-event_handler(struct wl_display *display,
+event_handler(struct wl_display *display, uint32_t id,
 	      uint32_t opcode, uint32_t arg1, uint32_t arg2, void *data)
 {
 	struct window *window = data;
 	int location, border = 4;
 	int grip_size = 16;
+
+	if (window->pointer == NULL || id != window->pointer->id)
+		return;
 
 	if (opcode == 0) {
 		window->last_x = arg1;
