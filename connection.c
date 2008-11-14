@@ -325,6 +325,180 @@ wl_connection_vmarshal(struct wl_connection *connection,
 }
 
 int
+wl_connection_demarshal_mem(struct wl_connection *connection,
+			    struct wl_hash *objects, void *dest, size_t dsize,
+			    const char *types, ...)
+{
+	uint32_t id;
+	int size;
+	size_t field_ofs, field_size, field_align;
+	const char *c;
+	union wl_element value;
+	struct wl_object *object;
+	uint32_t data[64], *p;
+	va_list va;
+
+#define alignof(type) offsetof (struct { char c; type i; }, i)
+
+	va_start (va, types);
+	for (field_ofs = 0, c = types; *c && *c != '|'; ) {
+		switch (*c) {
+		case 'i':
+			value.uint32 = va_arg (va, int);
+			c++;
+			field_size = sizeof (int);
+			field_align = alignof (int);
+			break;
+		case 'p':
+			value.object = va_arg (va, void *);
+			c++;
+			field_size = sizeof (void *);
+			field_align = alignof (void *);
+			break;
+		case 's':
+			value.object = va_arg (va, char *);
+			value.object = strdup (value.object);
+			c++;
+			field_size = sizeof (char *);
+			field_align = alignof (char *);
+			break;
+		case 'o':
+			id = va_arg (va, int);
+			object = wl_hash_lookup(objects, id);
+			if (object == NULL)
+				printf("unknown object (%d)\n", id);
+			c++;
+			value.object = object;
+			field_size = sizeof (void *);
+			field_align = alignof (void *);
+			break;
+#if 0
+		case '{':
+			id = va_arg (va, int);
+			object = wl_hash_lookup(objects, id);
+			if (object == NULL)
+				printf("unknown object (%d)\n", id);
+			c++;
+			if (!strchrcmp (&c, '}', object->interface->name))
+				printf("wrong object type\n");
+			value.object = object;
+			field_size = sizeof (void *);
+			field_align = alignof (void *);
+			break;
+#endif
+		case 'O':
+			value.new_id = id = va_arg (va, int);
+			if (objects != NULL) {
+				object = wl_hash_lookup(objects, id);
+				if (object != NULL)
+					printf("object already exists (%d)\n", id);
+			}
+			c++;
+			field_size = sizeof (int);
+			field_align = alignof (int);
+			break;
+		default:
+			printf("unknown type %c\n", *c++);
+			continue;
+		}
+
+		field_ofs = (field_ofs + field_align - 1) & -field_align;
+		if (field_ofs > dsize) {
+			printf("not enough memory");
+			return -1;
+		}
+		memcpy ((char *)dest + field_ofs, &value, field_size);
+		field_ofs += field_size;
+	}
+
+	if (*c == '|')
+		c++;
+
+	if (connection) {
+		wl_connection_copy(connection, data, 2 * sizeof (data[0]));
+		id = data[0];
+		size = data[1] >> 16;
+
+		if (sizeof data < size) {
+			printf("request too big, should malloc tmp buffer here\n");
+			return -1;
+		}
+		wl_connection_copy(connection, data, size);
+		wl_connection_consume(connection, size);
+	} else
+		id = -1, size = 0;
+		
+	for (p = &data[2]; *c; ) {
+		if ((p - data) * sizeof (data[0]) >= size) {
+			printf("incomplete packet\n");
+			return -1;
+		}
+		switch (*c) {
+		case 'i':
+			value.uint32 = *p;
+			field_size = sizeof (int);
+			field_align = alignof (int);
+			p++, c++;
+			break;
+		case 's': {
+			int length = *p++;
+			char *s = malloc (length + 1);
+			memcpy (s, p, length);
+			s[length] = 0;
+			value.object = s;
+			p += (length + 3) >> 2, c++;
+			field_size = sizeof (char *);
+			field_align = alignof (char *);
+			break;
+		}
+		case 'o':
+			if (object == NULL)
+				printf("unknown object (%d)\n", *p);
+			p++, c++;
+			value.object = object;
+			field_size = sizeof (void *);
+			field_align = alignof (void *);
+			break;
+#if 0
+		case '{':
+			if (object == NULL)
+				printf("unknown object (%d)\n", *p);
+			p++, c++;
+			if (!strchrcmp (&c, '}', object->interface->name))
+				printf("wrong object type\n");
+			value.object = object;
+			field_size = sizeof (void *);
+			field_align = alignof (void *);
+			break;
+#endif
+		case 'O':
+			value.new_id = *p;
+			if (objects != NULL) {
+				object = wl_hash_lookup(objects, *p);
+				if (object != NULL)
+					printf("object already exists (%d)\n", *p);
+			}
+			p++, c++;
+			field_size = sizeof (int);
+			field_align = alignof (int);
+			break;
+		default:
+			printf("unknown type %c\n", *c++);
+			break;
+		}
+
+		field_ofs = (field_ofs + field_align - 1) & -field_align;
+		if (field_ofs + field_size > dsize) {
+			printf("not enough memory");
+			return -1;
+		}
+		memcpy ((char *)dest + field_ofs, &value, field_size);
+		field_ofs += field_size;
+	}
+	return id;
+}
+
+int
 wl_connection_demarshal_ffi(struct wl_connection *connection,
 			    struct wl_hash *objects,
 			    void (*func)(void), const char *arguments, ...)
