@@ -2,6 +2,7 @@
 #define WAYLAND_H
 
 #include <stdint.h>
+#include <stdarg.h>
 
 /* GCC visibility */
 #if defined(__GNUC__) && __GNUC__ >= 4
@@ -99,7 +100,10 @@ struct wl_map {
 };
 
 struct wl_event_loop *wl_display_get_event_loop(struct wl_display *display);
-void wl_display_send_event(struct wl_display *display, uint32_t *data, size_t size);
+void wl_display_vsend_event(struct wl_display *display, struct wl_object *sender,
+			    uint32_t event, va_list va);
+void wl_display_send_event(struct wl_display *display, struct wl_object *sender,
+			   uint32_t event, ...);
 
 void wl_surface_set_data(struct wl_surface *surface, void *data);
 void *wl_surface_get_data(struct wl_surface *surface);

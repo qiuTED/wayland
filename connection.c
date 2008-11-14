@@ -207,6 +207,121 @@ strchrcmp (const char **pp, char end_p, const char *q)
 }
 		
 
+union wl_element {
+	uint32_t uint32;
+	const char *string;
+	void *object;
+	uint32_t new_id;
+};
+
+void
+wl_connection_marshal(struct wl_connection *connection, struct wl_hash *objects,
+		      uint32_t obj_id, uint32_t opcode, const char *types, ...)
+{
+	va_list va;
+	va_start (va, types);
+	wl_connection_vmarshal(connection, objects, obj_id, opcode, types, va);
+}
+
+void
+wl_connection_vmarshal(struct wl_connection *connection,
+		       struct wl_hash *objects, uint32_t obj_id,
+		       uint32_t opcode, const char *types, va_list va)
+{
+	uint32_t *p;
+	int i, id;
+	const char *c;
+	union wl_element values[20];
+	struct wl_object *object;
+	uint32_t data[64];
+	int size;
+
+	for (i = 0, c = types, size = 2 * sizeof(uint32_t); *c; i++) {
+		switch (*c) {
+		case 'i':
+			values[i].uint32 = va_arg (va, int);
+			size += sizeof (uint32_t);
+			c++;
+			break;
+		case 's': {
+			const char *s = va_arg (va, const char *);
+			int length = strlen (s);
+			values[i].string = s;
+			size += sizeof (uint32_t);
+			size += (length + 3) & ~3;
+			c++;
+			break;
+		}
+		case 'o':
+			id = va_arg (va, int);
+			object = wl_hash_lookup(objects, id);
+			if (object == NULL)
+				printf("unknown object (%d)\n", id);
+			c++;
+			values[i].uint32 = id;
+			break;
+#if 0
+		case '{':
+			id = va_arg (va, int);
+			object = wl_hash_lookup(objects, id);
+			if (object == NULL)
+				printf("unknown object (%d)\n", id);
+			c++;
+			if (!strchrcmp (&c, '}', object->interface->name))
+				printf("wrong object type\n");
+			values[i].uint32 = id;
+			break;
+#endif
+		case 'O':
+			values[i].uint32 = id = va_arg (va, int);
+			object = wl_hash_lookup(objects, id);
+			if (object != NULL)
+				printf("object already exists (%d)\n", id);
+			size += sizeof (uint32_t);
+			c++;
+			break;
+		default:
+			printf("unknown type %c\n", *c++);
+			break;
+		}
+	}
+
+	if (sizeof data < size) {
+		printf("request too big, should malloc tmp buffer here\n");
+		return;
+	}
+	data[0] = obj_id;
+	data[1] = (size << 16) | (opcode & 65535);
+	for (i = 0, c = types, p = &data[2]; *c; i++) {
+		switch (*c) {
+		case 'i':
+		case 'o':
+		case 'O':
+			*p++ = values[i].uint32;
+			c++;
+			break;
+		case 's': {
+			const char *s = values[i].string;
+			int length = strlen (s);
+			*p++ = length;
+			memcpy ((char *)p, s, length);
+			p += (length + 3) >> 2;
+			c++;
+			break;
+		}
+		case '{':
+			*p++ = values[i].uint32;
+			c = strchr (c, '}');
+			c++;
+			break;
+		default:
+			printf("unknown type %c\n", *c++);
+			break;
+		}
+	}
+	wl_connection_write (connection, data, size);
+}
+
 int
 wl_connection_demarshal_ffi(struct wl_connection *connection,
 			    struct wl_hash *objects,
@@ -218,12 +333,7 @@ wl_connection_demarshal_ffi(struct wl_connection *connection,
 	uint32_t *p;
 	int i, size;
 	const char *c;
-	union {
-		uint32_t uint32;
-		const char *string;
-		void *object;
-		uint32_t new_id;
-	} values[20];
+	union wl_element values[20];
 	void *args[20];
 	struct wl_object *object;
 	uint32_t data[64];

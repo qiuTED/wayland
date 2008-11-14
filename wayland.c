@@ -8,6 +8,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <dlfcn.h>
+#include <stdarg.h>
 #include <ffi.h>
 
 #include "wayland.h"
@@ -403,19 +404,36 @@ wl_display_create(void)
 	return display;		
 }
 
+/* TODO: this is inefficient, it marshals data repeatedly!  */
+
 WL_EXPORT void
-wl_display_send_event(struct wl_display *display, uint32_t *data, size_t size)
+wl_display_vsend_event(struct wl_display *display, struct wl_object *sender,
+		       uint32_t opcode, va_list va)
 {
 	struct wl_client *client;
 
 	client = container_of(display->client_list.next,
 			      struct wl_client, link);
 	while (&client->link != &display->client_list) {
-		wl_connection_write(client->connection, data, size);
+		va_list va2;
+		va_copy (va2, va);
+		wl_connection_vmarshal(client->connection, &display->objects,
+				       sender->id, opcode,
+				       sender->interface->events[opcode].arguments,
+				       va2);
 
 		client = container_of(client->link.next,
 				   struct wl_client, link);
 	}
+}
+
+WL_EXPORT void
+wl_display_send_event(struct wl_display *display, struct wl_object *sender,
+		      uint32_t opcode, ...)
+{
+	va_list va;
+	va_start (va, opcode);
+	wl_display_vsend_event (display, sender, opcode, va);
 }
 
 void

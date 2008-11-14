@@ -35,14 +35,8 @@ static const struct wl_interface input_device_interface = {
 static void
 wl_input_device_post_motion_event(struct wl_input_device *device, int x, int y)
 {
-	uint32_t p[4];
-
-	p[0] = device->base.id;
-	p[1] = (sizeof p << 16) | WL_POINTER_MOTION;
-	p[2] = x;
-	p[3] = y;
-
-	wl_display_send_event(device->display, p, sizeof p);
+	wl_display_send_event(device->display, &device->base,
+			      WL_POINTER_MOTION, x, y);
 }
 
 
@@ -50,14 +44,8 @@ static void
 wl_input_device_post_button_event(struct wl_input_device *device,
 				  int button, int state)
 {
-	uint32_t p[4];
-
-	p[0] = device->base.id;
-	p[1] = (sizeof p << 16) | WL_POINTER_BUTTON;
-	p[2] = button;
-	p[3] = state;
-
-	wl_display_send_event(device->display, p, sizeof p);
+	wl_display_send_event(device->display, &device->base,
+			      WL_POINTER_BUTTON, button, state);
 }
 
 
